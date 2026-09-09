@@ -1,0 +1,7 @@
+manifest: ./lzc-manifest.yml
+contentdir: ./content          # 前端静态资源（沿用 lazycat-jasna/index.html 产物）
+icon: ./lzc-icon.png
+package_meta: ./package.yml
+resource_exports:
+  - kind: aipod
+    source: ./aipod-resources   # 顶层直接是 config/、agxorin/（勿多套一层包名目录）

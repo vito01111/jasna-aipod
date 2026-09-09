@@ -1,0 +1,90 @@
+application:
+  subdomain: jasna-aipod
+  routes:
+    - /=file:///lzcapp/pkg/content
+  # 网盘「打开方式」入口：从懒猫网盘右键视频 → 以本应用打开（前端解析 ?file= 走导入）
+  file_handler:
+    mime:
+      - video/mp4
+      - video/quicktime
+      - video/x-matroska
+      - video/x-msvideo
+      - video/webm
+      - video/x-flv
+    actions:
+      open: /?file=%u
+  upstreams:
+    # API 面两个前缀全部转到 AIPod 的 jasna-ai host（use_backend_host 保 Host）。
+    # 0.1.22 去设备绑定：/jasna/（流式，硬编码 x3 IP）与 /drive/（网盘桥，硬编码盒子 IP）
+    # 两条 upstream 删除——网盘能力改走平台通道（WebDAV + file-pickers 组件 + 注入兜底）。
+    - location: /api/
+      backend: https://jasna-ai.{{ .S.BoxDomain }}/api/
+      use_backend_host: true
+    - location: /wapi/
+      backend: https://jasna-ai.{{ .S.BoxDomain }}/wapi/
+      use_backend_host: true
+  injects:
+    # 官方文件选择拦截（基础版兜底）：接管 showOpen/showSaveFilePicker 与 <input type=file>，
+    # 弹「本地 / 懒猫网盘」二选一。显式网盘入口（应用内 picker）不依赖本注入生效。
+    - id: open-save-chooser
+      on: browser
+      when:
+        - "/*"
+      do:
+        - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js
+          params:
+            diskRoot: /_lzc/files/home
+            fallbackMime: video/mp4
+            locale: auto
+            hooks:
+              fileSystemAccess: true
+              fileInput: true
+            text:
+              zh-CN:
+                openTitle: 打开视频
+                saveTitle: 保存视频
+                openLocal: 从本地打开
+                openLazyCat: 从懒猫网盘打开
+                saveLocal: 保存至本地
+                saveLazyCat: 保存至懒猫网盘
+                cancel: 取消
+              en-US:
+                openTitle: Open video
+                saveTitle: Save video
+                openLocal: Open from local device
+                openLazyCat: Open from LazyCat Drive
+                saveLocal: Save to local device
+                saveLazyCat: Save to LazyCat Drive
+                cancel: Cancel
+    - id: aipod-startup-gate
+      on: request
+      auth_required: false
+      when:
+        - "/*"
+      unless:
+        - /assets/*
+        - /_lzc/*
+        - /favicon.ico
+        - /icon.png
+        - /manifest.json
+        # 数据面前缀必须豁免启动门：门页靠顶层导航 JS 种 ready-cookie，
+        # SPA 内 fetch 永远种不上 → 每个请求都被 307 弹一轮，偶发回跳丢
+        # 路径返回 index.html（hls.js 拿 HTML 当 m3u8 → manifestParsingError）
+        - /api/*
+        - /wapi/*
+      do:
+        - src: |
+            const appId = "cloud.lazycat.aipod.jasna";
+            const readyCookieName = "aipod_startup_ready_" + appId.replace(/[^A-Za-z0-9]/g, "_");
+            const cookie = String(ctx.headers.get("Cookie") || "");
+            if (cookie.indexOf(readyCookieName + "=") >= 0) {
+              return;
+            }
+            const path = String(ctx.request.path || "/");
+            const rawQuery = String(ctx.request.raw_query || "");
+            const redirect = "https://" + ctx.request.host + path + (rawQuery ? "?" + rawQuery : "");
+            const gate = "/_lzc/aipod_backend/startup/gate/" + appId + "?redirect=" + encodeURIComponent(redirect);
+            ctx.response.send(307, "", { location: gate });
+# AIPod 资源导入声明（对齐 lada-restore 参考实现；资源本体由 lzc-build.yml resource_exports 提供）
+import_resources:
+  - kind: aipod

@@ -1,0 +1,3207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jasna 工作台</title>
+<style>
+  :root { --bg:#101418; --panel:#1a2129; --line:#2a3440; --fg:#e8edf2; --dim:#8a99a8; --acc:#4da3ff; --ok:#3fbf7f; --warn:#f0b429; --err:#ff7b72; --tabbar-h:54px }
+  * { box-sizing:border-box; margin:0; padding:0 }
+  body { background:var(--bg); color:var(--fg); font:14.5px/1.6 system-ui,'PingFang SC','Microsoft YaHei',sans-serif; min-height:100vh; display:flex; flex-direction:column }
+  header { display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap }
+  header h1 { font-size:16px }
+  .logo { width:26px; height:26px; border-radius:6px; background:linear-gradient(135deg,#4da3ff,#7f5cff); display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; font-size:13px }
+  .ver { font-size:11px; color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:1px 8px }
+  #state { font-size:13px; color:var(--dim) }
+  #state.on { color:var(--ok) }
+  header .spacer { flex:1 }
+  nav.top { display:flex; gap:4px; padding:10px 22px 0; border-bottom:1px solid var(--line) }
+  nav.top button { background:none; border:none; border-bottom:2px solid transparent; color:var(--dim); padding:8px 16px; font-size:14px; cursor:pointer }
+  nav.top button.active { color:var(--fg); border-bottom-color:var(--acc) }
+  .tabbar { display:none }
+  main { flex:1; padding:16px 22px; max-width:1280px; width:100%; margin:0 auto }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px }
+  table { width:100%; border-collapse:collapse; font-size:13.5px }
+  th { text-align:left; color:var(--dim); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--line) }
+  td { padding:8px 10px; border-bottom:1px solid #212a34 }
+  .btn { background:var(--acc); border:none; color:#fff; border-radius:7px; padding:6px 14px; font-size:13px; cursor:pointer }
+  .btn:hover { filter:brightness(1.12) }
+  .btn.sec { background:#26303b; color:var(--fg) }
+  .btn.mini { padding:4px 10px; font-size:12.5px }
+  .btn.danger { background:#5c2830 }
+  .btn[disabled] { opacity:.45; cursor:not-allowed }
+  .fav-star { background:none; border:none; color:var(--dim); font-size:17px; cursor:pointer; padding:4px 7px; line-height:1 }
+  .fav-star:hover { color:var(--warn) }
+  .fav-star.on { color:var(--warn) }
+  .btn:disabled { opacity:.45; cursor:not-allowed }
+  .btn.big { padding:12px 18px; font-size:15px; border-radius:9px }
+  @media (min-width: 861px) {
+    /* 桌面：hero 尺寸只属于移动端，主按钮回归常规尺寸 */
+    .btn.big { padding:6px 16px; font-size:13px; border-radius:7px }
+  }
+  .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:12px; white-space:nowrap }
+  .badge.running, .badge.uploading { background:#123524; color:var(--ok) }
+  .badge.queued, .badge.waiting { background:#333018; color:var(--warn) }
+  .badge.paused { background:#1d2b3a; color:var(--acc) }
+  .badge.ready { background:#0f2b3a; color:var(--acc) }
+  .badge.staged { background:#0f2b1c; color:var(--ok) }
+  .badge.nodetect { background:#333018; color:var(--warn) }
+  .badge.done { background:#0f2b1c; color:var(--ok) }
+  .badge.failed, .badge.cancelling, .badge.interrupted { background:#3a1a1e; color:var(--err) }
+  .badge.cancelled { background:#2a2f36; color:var(--dim) }
+  .pbar { background:#0d1116; border-radius:99px; height:8px; overflow:hidden; flex:1; min-width:100px }
+  .pbar>div { height:100%; background:linear-gradient(90deg,#4da3ff,#3fbf7f); transition:width .6s }
+  .row { display:flex; align-items:center; gap:12px }
+  .dim { color:var(--dim); font-size:12.5px }
+  pre.log { background:#0d1116; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font:12px/1.5 ui-monospace,Consolas,monospace; overflow-x:auto; max-height:220px; color:#9fb0c0; white-space:pre-wrap }
+  /* 弹窗层级梯度：selbar/底栏 8 < 抽屉 12 < 常规弹窗 22 < 拖拽遮罩 30 */
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:22 }
+  .modal-bg.show { display:flex }
+  .modal { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; width:min(560px,92vw); max-height:92vh; overflow-y:auto }
+  .modal h3 { margin-bottom:14px; font-size:16px }
+  .field { margin-bottom:12px }
+  .field label { display:block; font-size:13px; color:var(--dim); margin-bottom:5px }
+  .field select, .field input { width:100%; background:#0d1116; border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:8px 10px; font-size:14px }
+  .field input[type=checkbox] { width:auto }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px }
+  details.sect { border:1px solid var(--line); border-radius:9px; padding:8px 12px; margin-bottom:10px; background:#161d24 }
+  details.sect summary { cursor:pointer; font-size:13.5px; color:var(--fg); font-weight:500; user-select:none }
+  details.sect[open] summary { margin-bottom:10px }
+  /* 通道显式滑块（segmented control） */
+  .seg { display:inline-flex; background:#0d1116; border:1px solid var(--line); border-radius:9px; padding:3px; gap:2px }
+  /* 选段编辑器全屏 overlay（v0.21：不再是导航 tab，从就绪卡「调整范围」进入） */
+  #tab-segments.seg-overlay { display:block !important; position:fixed; inset:0; z-index:26;
+    background:var(--bg); overflow-y:auto; padding:14px 14px 40px }
+  .seg button { background:none; border:none; color:var(--dim); border-radius:7px; padding:5px 13px; font-size:12.5px; cursor:pointer }
+  .seg button.on { background:var(--acc); color:#fff }
+  /* 任务筛选 chips */
+  .chips { display:flex; gap:6px; flex-wrap:wrap }
+  .chip { background:#0d1116; border:1px solid var(--line); color:var(--dim); border-radius:99px; padding:3px 12px; font-size:12.5px; cursor:pointer; white-space:nowrap }
+  .chip.on { border-color:var(--acc); color:var(--fg); background:#12202e }
+  /* 首屏创建工具条：桌面紧凑一行，移动主按钮整行 + chips 横滑 */
+  .create-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap }
+  .create-row .btn-create { white-space:nowrap }
+  .create-row .chips { margin-left:2px }
+  #timeline { touch-action: none; user-select: none }
+  .tl-hint { margin: -8px 0 10px }
+  /* 统一任务行 */
+  .task { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer }
+  .task:hover { border-color:#3a4a5c }
+  .task .t-head { display:flex; align-items:center; gap:8px }
+  .task .t-name { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 }
+  .task .t-sub { color:var(--dim); font-size:12.5px; margin-top:2px }
+  .task .t-bar { display:flex; align-items:center; gap:10px; margin-top:8px }
+  .task .t-acts { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap }
+  /* 选择批量操作条 */
+  .selbar { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:8; background:#1c2733; border:1px solid var(--acc); border-radius:12px; padding:10px 16px; display:none; gap:12px; align-items:center; box-shadow:0 8px 30px rgba(0,0,0,.5); max-width:94vw }
+  .selbar.show { display:flex }
+  /* 详情抽屉：桌面右侧栏 / 移动端底部 sheet */
+  #drawer { position:fixed; top:0; right:0; bottom:0; width:min(470px,100vw); background:var(--panel); border-left:1px solid var(--line); z-index:12; transform:translateX(102%); transition:transform .22s; overflow-y:auto; padding:18px }
+  #drawer.open { transform:none }
+  #drawer-bg { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:11 }
+  #drawer-bg.show { display:block }
+  .d-sect { border-top:1px solid var(--line); margin-top:14px; padding-top:12px }
+  .kv { display:grid; grid-template-columns:76px 1fr; gap:4px 10px; font-size:13px }
+  .kv .k { color:var(--dim) }
+  /* system_stats 底栏 */
+  #statsbar { display:flex; gap:14px; align-items:center; padding:8px 16px; border-top:1px solid var(--line); font-size:12px; background:var(--panel); flex-wrap:wrap }
+  .gauge { display:flex; align-items:center; gap:6px; min-width:120px }
+  .gauge .gl { color:var(--dim); min-width:36px }
+  .gb { flex:1; height:6px; background:#0d1116; border-radius:99px; overflow:hidden; min-width:46px }
+  .gb>div { height:100%; width:0; background:var(--ok); border-radius:99px; transition:width .8s }
+  .gb>div.warn { background:var(--warn) }
+  .gb>div.err { background:var(--err) }
+  #playerwrap { background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center }
+  video { width:100%; height:100%; object-fit:contain; background:#000 }
+  #seek { width:100%; accent-color:var(--acc) }
+  .actions { display:flex; gap:8px; flex-wrap:wrap }
+  .mark-box { background:#161d24; border:1px dashed var(--line); border-radius:8px; padding:8px 12px; font-size:13px }
+  /* 全页拖拽上传遮罩 */
+  #dropzone { position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center; background:rgba(10,16,22,.78); pointer-events:none }
+  #dropzone.show { display:flex }
+  #dropzone .dz-box { border:2px dashed var(--acc); border-radius:16px; padding:38px 60px; font-size:17px; background:rgba(26,33,41,.92) }
+  /* 缩略图（任务卡/上传行/素材库/成品库共用同一组件） */
+  .thumb { width:64px; aspect-ratio:16/9; border-radius:6px; background:#0d1116; border:1px solid var(--line); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; align-self:flex-start }
+  .thumb img { width:100%; height:100%; object-fit:cover; display:block }
+  .thumb .thumb-ph { color:var(--dim); font-size:11px; opacity:.55 }
+  .thumb.sm { width:52px }
+  .task .t-main { display:flex; gap:10px; align-items:flex-start }
+  .task .t-body { flex:1; min-width:0 }
+  .hist-chip { cursor:pointer; flex-shrink:0; font-size:11.5px; color:var(--dim); border:1px solid var(--line); border-radius:99px; padding:1px 9px; background:#0d1116 }
+  .hist-chip:hover { color:var(--fg); border-color:#3a4a5c }
+  .t-hist { margin-top:8px; border-top:1px dashed var(--line); padding-top:8px; display:grid; gap:6px }
+  .hist-row { gap:8px; font-size:12.5px }
+  .hist-row .actions { flex-shrink:0 }
+  /* 卡片操作分层：主操作露出 + ⋯ 溢出菜单 */
+  .menu-wrap { position:relative; display:inline-flex }
+  .pop-menu { position:absolute; right:0; top:calc(100% + 4px); z-index:20; min-width:118px; background:#1c2733; border:1px solid var(--line); border-radius:9px; padding:4px; display:grid; gap:2px; box-shadow:0 8px 24px rgba(0,0,0,.5) }
+  .pop-menu button { background:none; border:none; color:var(--fg); text-align:left; padding:6px 12px; font-size:13px; border-radius:6px; cursor:pointer; white-space:nowrap }
+  .pop-menu button:hover { background:#26303b }
+  .pop-menu button.pm-danger { color:var(--err) }
+  /* 成品对比预览（滑块分割线 / 并排 / 单画面） */
+  .cmp-wrap { position:relative; background:#000; border-radius:10px; overflow:hidden; aspect-ratio:16/9 }
+  .cmp-wrap video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; background:#000 }
+  .cmp-clip { position:absolute; top:0; bottom:0; left:0; overflow:hidden; width:50% }
+  .cmp-clip video { max-width:none }
+  .cmp-handle { position:absolute; top:0; bottom:0; left:50%; width:3px; margin-left:-1.5px; background:var(--acc); cursor:ew-resize; z-index:2 }
+  .cmp-handle span { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:24px; height:24px; border-radius:50%; background:var(--acc); color:#fff; font-size:13px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5) }
+  .cmp-tag { position:absolute; top:8px; z-index:2; font-size:11px; color:#fff; background:rgba(13,17,22,.72); border-radius:99px; padding:1px 9px }
+  .cmp-tag.l { left:8px } .cmp-tag.r { right:8px }
+  .cmp-wrap.sbs { display:grid; grid-template-columns:1fr 1fr; gap:2px }
+  .cmp-wrap.sbs video { position:static; width:100%; height:100% }
+  .cmp-wrap.sbs .cmp-clip { position:static; overflow:visible; width:auto !important; order:1 }
+  .cmp-wrap.sbs > #cmp-after { order:2 }   /* 与滑块模式一致：左原始 / 右成品 */
+  .cmp-wrap.sbs .cmp-handle { display:none }
+  .cmp-wrap.solo .cmp-clip, .cmp-wrap.solo .cmp-handle, .cmp-wrap.solo .cmp-tag.l { display:none }
+  .lg-man { background:#2d5f96 }
+  .tl-block.tl-manual { background:#2d5f96 }
+  .tl-block.tl-manual.tl-off { background:repeating-linear-gradient(45deg,#2c4666 0 6px,#3d5c80 6px 12px) }
+  .sel-chips { display:flex; flex-wrap:wrap; gap:6px }
+  .sel-chip { display:inline-flex; align-items:center; gap:6px; background:#12202e; border:1px solid #2a4a66; color:var(--fg); border-radius:99px; padding:2px 11px; font-size:12.5px }
+  .sel-chip .chip-tag { font-style:normal; color:#7fb3e0; font-size:11px }
+  .sel-chip .x { background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:0 0 0 2px; line-height:1 }
+  .sel-chip .x:hover { color:var(--err) }
+  .scan-live::after { content:' …'; animation: scpulse 1.1s ease-in-out infinite }
+  @keyframes scpulse { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+  /* 段选中语义：绿=将修复，斜纹灰=跳过 */
+  .lg { display:inline-block; width:12px; height:9px; border-radius:2px; margin:0 4px 0 10px }
+  .lg-on { background:#2f6f4f } .lg-off { background:#4d5866 }
+  .tl-block { background:#2f6f4f }
+  .tl-block.tl-off { background:repeating-linear-gradient(45deg,#39434f 0 6px,#4d5866 6px 12px); opacity:.8 }
+  #spans .card.span-off { opacity:.5 }
+  /* ===== 移动端 ===== */
+  @media (max-width: 860px) {
+    header { padding:10px 14px }
+    main { padding:12px 12px calc(var(--tabbar-h) + 86px) }
+    nav.top { display:none }
+    .create-row { gap:8px }
+    .create-row .btn-create { flex:1 }
+    .create-row .chips { flex:0 0 100%; order:3; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; margin-left:0; padding-bottom:2px }
+    .create-row .chips::-webkit-scrollbar { display:none }
+    .create-row .chip { flex-shrink:0 }
+    .tabbar { display:flex; position:fixed; left:0; right:0; bottom:0; height:calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom); background:var(--panel); border-top:1px solid var(--line); z-index:9 }
+    .tabbar button { flex:1; background:none; border:none; color:var(--dim); font-size:12px; padding:8px 0 6px; cursor:pointer }
+    .tabbar button.active { color:var(--acc) }
+    .tabbar button .ti { display:block; font-size:19px; line-height:1.2 }
+    #statsbar { position:fixed; left:0; right:0; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom)); border-top:1px solid var(--line); z-index:8; padding:5px 12px; gap:10px }
+    .gauge { min-width:104px }
+    .gauge .gl { min-width:30px }
+    #drawer { top:auto; left:0; right:0; width:100vw; max-height:84vh; border:none; border-radius:16px 16px 0 0; transform:translateY(103%); padding:16px 14px calc(16px + env(safe-area-inset-bottom)) }
+    #drawer.open { transform:none }
+    .selbar { bottom:calc(var(--tabbar-h) + 44px + env(safe-area-inset-bottom)); width:94vw }
+    .tbl-wrap { overflow-x:auto }
+    .tbl-wrap table { min-width:560px }
+  }
+  @media (min-width: 861px) { .tabbar { display:none } }
+.welcome-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.wstep{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">J</div>
+  <h1>Jasna 工作台</h1>
+  <span class="ver">v0.1.31</span>
+  <div class="spacer"></div>
+  <select id="ch-sel" title="上传通道：自动=优先局域网直连，失败回退域名中转" onchange="setChannel(this.value)" style="background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 8px;font-size:12.5px">
+    <option value="auto">⇅ 自动</option>
+    <option value="direct">直连</option>
+    <option value="domain">域名</option>
+  </select>
+  <button class="btn sec mini" id="remind-btn" onclick="toggleRemind()" title="任务完成提醒（提示音+系统通知）" style="padding:5px 9px">🔔</button>
+  <button class="btn sec mini" id="stats-btn" onclick="toggleStats()" title="系统监控（CPU/GPU/内存/显存）" style="padding:5px 9px">📊</button>
+  <button class="btn sec mini" id="help-btn" onclick="openWelcome(true)" title="首次启动演示 / 使用说明" style="padding:5px 9px">?</button>
+  <div id="state">连接中…</div>
+</header>
+<nav class="top">
+  <button class="active" data-tab="tasks" onclick="tab('tasks')">任务</button>
+  <button data-tab="media" onclick="tab('media')">媒体库</button>
+</nav>
+<main>
+  <!-- ===== 任务（首屏）：上传 + 加工统一列表 ===== -->
+  <section id="tab-tasks">
+    <div class="create-row">
+      <button class="btn btn-create big" onclick="pickUploadFiles()">＋ 新建任务</button>
+      <div class="chips" id="task-chips">
+        <button class="chip on" data-f="all" onclick="setFilter('all')">全部</button>
+        <button class="chip" data-f="active" onclick="setFilter('active')">进行中</button>
+        <button class="chip" data-f="pending" onclick="setFilter('pending')">等待</button>
+        <button class="chip" data-f="revive" onclick="setFilter('revive')">待继续</button>
+        <button class="chip" data-f="done" onclick="setFilter('done')">完成</button>
+      </div>
+    </div>
+    <div class="dim" id="task-summary" style="margin-bottom:10px"></div>
+    <div id="task-list"></div>
+  </section>
+
+  <!-- ===== 媒体库（成品+素材双子 tab，默认成品；顶部空间占用可视化，2026-09-05） ===== -->
+  <section id="tab-media" style="display:none">
+    <div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:8px">
+        <strong>空间占用</strong><span class="dim" id="space-note"></span>
+      </div>
+      <div id="space-bar" style="display:flex; height:16px; border-radius:8px; overflow:hidden; background:#161b22; border:1px solid var(--line)"></div>
+      <div id="space-legend" class="dim" style="margin-top:8px; font-size:12px; line-height:1.8"></div>
+    </div>
+    <div class="chips" style="margin:10px 0">
+      <button class="chip on" id="mtab-outputs" onclick="setMediaTab('outputs')">成品库</button>
+      <button class="chip" id="mtab-library" onclick="setMediaTab('library')">素材库</button>
+    </div>
+    <div id="media-library" style="display:none">
+    <div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <strong>素材库（/videos）</strong>
+        <div class="actions">
+          <button class="btn mini" onclick="pickUploadFiles()">上传</button>
+          <button class="btn sec mini" title="GB 级大文件流式导入（不经内存缓冲）；常规小文件用「上传」，弹窗里可直接选懒猫网盘" onclick="driveImportUI()">网盘大文件导入</button>
+          <!-- 自动处理开关已移除（0.1.20 拆双链）：自动链由后端 JASNA_AUTOCHAIN 唯一负责，开关=后端 JASNA_AUTO_PROC -->
+          <button class="btn sec mini" onclick="loadVideos()">刷新</button>
+        </div>
+      </div>
+      <div class="row" style="gap:8px; margin-bottom:8px; flex-wrap:wrap; align-items:center">
+        <input id="v-search" placeholder="搜索素材（文件名 / 番号）" oninput="onVSearch(this.value)" style="flex:1; min-width:150px; background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:6px 10px">
+        <span class="dim" id="v-count"></span>
+      </div>
+      <div class="tbl-wrap">
+      <table>
+        <thead id="v-thead"></thead>
+        <tbody id="vlib"><tr><td colspan="8" class="dim">加载中…</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="media-outputs">
+    <div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <strong>成品库（/outputs）</strong>
+        <div class="actions">
+          <button class="btn sec mini" id="oselect-btn" onclick="toggleOSelect()">选择</button>
+          <button class="btn sec mini" onclick="loadOutputs()">刷新</button>
+        </div>
+      </div>
+      <div class="row" style="gap:8px; margin-bottom:8px; flex-wrap:wrap; align-items:center">
+        <input id="o-search" placeholder="搜索成品（文件名 / 番号）" oninput="onOSearch(this.value)" style="flex:1; min-width:150px; background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:6px 10px">
+        <div class="chips">
+          <button class="chip on" id="of-all" onclick="setOFilter('all')">全部</button>
+          <button class="chip" id="of-fav" onclick="setOFilter('fav')">收藏 ★</button>
+        </div>
+        <span class="dim" id="o-count"></span>
+      </div>
+      <div class="tbl-wrap">
+      <table>
+        <thead id="o-thead"></thead>
+        <tbody id="olib"><tr><td colspan="6" class="dim">加载中…</td></tr></tbody>
+      </table>
+      </div>
+      <div id="osel-bar" class="row" style="display:none; margin-top:10px; padding:8px 10px; background:#161b22; border:1px solid var(--line); border-radius:8px; gap:8px; align-items:center"></div>
+    </div>
+  </div>
+  </section>
+
+  <!-- ===== 修复范围（原段编辑弹窗 → 独立 tab；选范围与已选结果就近摆放） ===== -->
+  <section id="tab-segments" style="display:none">
+    <div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:8px">
+        <strong>修复范围 <span id="scan-target" class="dim"></span></strong>
+        <div class="row">
+          <select id="scan-video" onchange="openSegTab(this.value)" style="background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:6px 10px"></select>
+          <button class="btn mini" id="scan-start-btn" onclick="startScan()">开始扫描</button>
+          <button class="btn sec mini" onclick="closeSegOverlay()" title="返回（Esc）">✕ 关闭</button>
+        </div>
+      </div>
+      <div id="scan-status" class="dim" style="margin-bottom:10px"></div>
+      <div class="row" style="margin-bottom:8px; gap:16px; flex-wrap:wrap">
+        <div class="row" style="gap:8px">
+          <span class="dim">检测阈值</span>
+          <input id="refilter-thr" type="range" min="0.05" max="0.9" step="0.05" value="0.30" style="width:170px; accent-color:var(--acc)" onchange="refilterDebounced()" oninput="$('refilter-thr-val').textContent=this.value">
+          <b id="refilter-thr-val" style="min-width:32px">0.30</b>
+          <span class="dim">拖动即时重过滤，免重扫</span>
+        </div>
+        <div class="row" style="gap:6px; margin-left:auto">
+          <button class="btn sec mini" onclick="spansUndo()" title="Ctrl+Z">↶ 撤销</button>
+          <button class="btn sec mini" onclick="spansRedo()" title="Ctrl+Shift+Z">↷ 重做</button>
+        </div>
+      </div>
+      <div class="row" style="justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:6px">
+        <span class="dim"><i class="lg lg-on"></i>检出片段 <i class="lg lg-man"></i>手动画出 <i class="lg lg-off"></i>已跳过 · 单击段切换是否修复</span>
+        <span class="actions">
+          <button class="btn sec mini" onclick="refineByDetection()" title="把勾选的手动画出的范围，替换为其内部检出的片段（只修选中区域里的马赛克片段，更快）">只留检出片段</button>
+          <button class="btn sec mini" onclick="setAllSpans(true)">全选</button>
+          <button class="btn sec mini" onclick="setAllSpans(false)">全不选</button>
+        </span>
+      </div>
+      <div id="timeline" style="position:relative;height:34px;background:#0d1116;border-radius:8px;margin:6px 0 6px;overflow:hidden"></div>
+      <div id="sel-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px"></div>
+      <div class="dim tl-hint" style="margin:0 0 8px">空白处按住拖拽 = 画范围 · 拖段两侧边缘 = 微调 · 单击段 = 修复/跳过 · 双击段 = 预览</div>
+      <div class="row" style="justify-content:flex-end;gap:12px;flex-wrap:wrap">
+        <span class="dim" id="sel-note" style="margin-right:auto"></span>
+        <span class="dim">修复方式</span>
+        <span class="seg" id="apply-mode-seg">
+          <button data-m="spans" class="on" onclick="setApplyMode('spans')">逐段修复</button>
+          <button data-m="range" onclick="setApplyMode('range')">整段修复</button>
+        </span>
+        <button class="btn" id="seg-submit" onclick="applySegments()" style="display:none">用于新建任务</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row" style="margin-bottom:8px; gap:6px; flex-wrap:wrap">
+        <strong style="font-size:13.5px">片段明细</strong>
+        <span class="dim" style="margin-left:auto">手动添加范围（秒）</span>
+        <input id="span-add-start" type="number" step="0.5" min="0" placeholder="起" style="width:80px;background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:4px 6px;font-size:13px">
+        <span class="dim">→</span>
+        <input id="span-add-end" type="number" step="0.5" min="0" placeholder="止" style="width:80px;background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:4px 6px;font-size:13px">
+        <button class="btn sec mini" onclick="addSpanManual()">添加</button>
+      </div>
+      <div id="spans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
+    </div>
+  </section>
+</main>
+
+<!-- 移动端底部 tab 栏 -->
+<div class="tabbar">
+  <button class="active" data-tab="tasks" onclick="tab('tasks')"><span class="ti">☰</span>任务</button>
+  <button data-tab="media" onclick="tab('media')"><span class="ti">▶</span>媒体</button>
+</div>
+
+<div id="statsbar"></div>
+
+<!-- 批量选择操作条 -->
+<div class="selbar" id="lib-selbar">
+  <span class="dim">已选 <b id="lib-sel-n" style="color:var(--fg)">0</b> 个素材</span>
+  <button class="btn mini" onclick="batchFromSelection()">批量加工</button>
+  <button class="btn danger mini" onclick="deleteFromSelection()">删除所选</button>
+  <button class="btn sec mini" onclick="clearLibSelection()">取消选择</button>
+</div>
+
+<!-- 全页拖拽上传遮罩（pointer-events:none，drop 落到 window） -->
+<div id="dropzone"><div class="dz-box">⬇ 松开鼠标，上传视频到素材库</div></div>
+
+<!-- 文件选择器（隐藏）：任务页「＋新建任务」/ 库页「上传」/ 断点续传重挂文件 共用 -->
+<input type="file" id="upload-input" accept="video/*" multiple style="display:none" onchange="startUploads(this.files); this.value=''; closeModal(); tab('tasks')">
+<input type="file" id="reattach-input" accept="video/*" style="display:none" onchange="reattachFile(this)">
+
+<!-- ===== 加工参数弹窗（支持单个/批量） ===== -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="m-title">新建加工任务</h3>
+    <div class="dim" id="m-batch-note" style="display:none; margin:-6px 0 10px; color:var(--acc)">以下参数将应用于本批全部文件</div>
+    <div class="row" style="gap:8px; margin-bottom:12px">
+      <span class="dim">预设</span>
+      <select id="m-preset" onchange="presetApply()" style="flex:1;background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:6px 10px"></select>
+      <button class="btn sec mini" onclick="presetSave()">存为预设</button>
+      <button class="btn sec mini" onclick="presetDelete()">删除</button>
+      <button class="btn sec mini" onclick="resetToDefaults()" title="清除本次弹窗的记忆，回到出厂默认">恢复默认</button>
+    </div>
+    <div class="field"><label id="m-input-label">输入</label><input id="m-input" readonly></div>
+    <div class="field" id="m-out-field"><label>输出文件名（保存到 /outputs，默认自动命名）</label><input id="m-output" placeholder="xxx-restored.mp4"></div>
+    <div class="field" id="m-pattern-field"><label>输出模板（{original}=输入名）</label><input id="m-pattern" placeholder="{original}-restored" oninput="updateBatchPreview()"><div class="dim" id="m-pattern-preview" style="margin-top:5px"></div></div>
+    <div class="grid2">
+      <div class="field"><label>输出编码</label><select id="m-codec"><option value="hevc">HEVC（默认）</option><option value="h264">H.264</option><option value="av1">AV1（CPU，慢）</option></select></div>
+      <div class="field"><label>质量 <span class="dim" title="CRF/CQ，越小越清晰。NVENC 硬编映射为 -cq，CPU 编码映射为 CRF，两条编码通道均生效">（NVENC/CPU 均生效）</span></label><select id="m-quality"><option value="">默认（20/24）</option><option value="14">极高（14）</option><option value="16">高（16）</option><option value="18">较高（18）</option><option value="20">标准（20）</option><option value="23">较小（23）</option><option value="26">小体积（26）</option><option value="30">极小（30）</option><option value="32">极限压缩（32）</option></select></div>
+    </div>
+    <div class="field" id="m-seg-field" style="display:none"><label>处理范围（smart render：范围外直通，输出编码自动匹配输入）</label><input id="m-seg" readonly></div>
+    <div class="field" id="m-seg-pick-field"><label>处理范围（可选，smart render）</label>
+      <div class="row">
+        <input id="m-seg-summary" readonly placeholder="全片" style="flex:1;background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:8px 10px;font-size:13px">
+        <button class="btn sec mini" onclick="openSegPickerFromModal()">选择范围</button>
+        <button class="btn sec mini" id="m-seg-clear" style="display:none" onclick="clearSegPick()">清除</button>
+      </div>
+      <div class="dim" id="m-seg-suggest" style="margin-top:5px"></div>
+    </div>
+
+    <label style="display:flex;gap:6px;align-items:center;margin:2px 0 12px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="m-expert" onchange="toggleExpert()"> 专家参数（封装 · 检测 · 去噪 · 编码细节）</label>
+    <div id="m-expert-zone">
+      <div class="grid2" id="m-out-grid">
+        <div class="field"><label>封装</label><select id="m-container" onchange="fixExt()"><option value="mp4">MP4（默认）</option><option value="mkv">MKV</option></select></div>
+        <div class="field"><label>重名处理</label><select id="m-conflict"><option value="auto">自动改名（默认）</option><option value="overwrite">覆盖</option><option value="skip">跳过</option></select></div>
+      </div>
+
+      <details class="sect" open>
+        <summary>基础 · 检测与剪辑</summary>
+        <div class="grid2">
+          <div class="field"><label>检测模型</label><select id="m-det" onchange="detThresholdHint()"></select></div>
+          <div class="field"><label>检测分数阈值 <span id="m-thr-hint" class="dim"></span></label><input id="m-threshold" type="number" step="0.05" min="0.05" max="0.9" placeholder="模型默认"></div>
+          <div class="field"><label>最大片段帧数（默认 90）</label><input id="m-clip" type="number" value="90" min="8" max="720"></div>
+          <div class="field"><label>批大小（默认 4）</label><input id="m-batch" type="number" value="4" min="1" max="16"></div>
+          <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input id="m-fp16" type="checkbox" checked> FP16 推理</label></div>
+          <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input id="m-compile" type="checkbox" checked> 编译 BasicVSR++（首次慢）</label></div>
+        </div>
+      </details>
+
+      <details class="sect">
+        <summary>检测高级 · VR</summary>
+        <div class="grid2">
+          <div class="field"><label>检测间隙桥接（帧，默认 2）</label><input id="m-gap" type="number" min="0" placeholder="默认"></div>
+          <div class="field"><label>最短检出时长（帧，默认 2）</label><input id="m-mindur" type="number" min="0" placeholder="默认"></div>
+          <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input id="m-scene" type="checkbox" checked> 场景切变检测</label></div>
+          <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input id="m-crossfade" type="checkbox" checked> 段边缘交叉淡化</label></div>
+          <div class="field"><label>VR 模式</label><select id="m-vr"><option value="auto">auto（自动探测）</option><option value="off">off</option><option value="sbs">sbs（左右并排）</option><option value="sbs-fisheye">sbs-fisheye（VR180 鱼眼）</option></select></div>
+        </div>
+      </details>
+
+      <details class="sect">
+        <summary>修复 · 去噪</summary>
+        <div class="grid2">
+          <div class="field"><label>降噪（修复区域）</label><select id="m-denoise"><option value="none">关闭</option><option value="low">轻</option><option value="medium">中</option><option value="high">强</option></select></div>
+          <div class="field"><label>降噪时机</label><select id="m-denoisestep"><option value="after_primary">一级修复后（默认）</option><option value="after_secondary">二级修复后</option></select></div>
+          <div class="field"><label>时域重叠帧（默认 8）</label><input id="m-overlap" type="number" value="8" min="0" max="30"></div>
+        </div>
+      </details>
+
+      <details class="sect">
+        <summary>编码 · 输出微调</summary>
+        <div class="grid2">
+          <div class="field"><label>编码器通道</label><select id="m-enc"><option value="">自动（NVENC 硬编，回退 CPU）</option><option value="cpu">CPU（x264/x265，画质优先）</option><option value="nvenc">强制 NVENC</option></select></div>
+          <div class="field"><label>锐化 <span id="m-sharpen-val" class="dim">关</span></label><input id="m-sharpen" type="range" min="0" max="1" step="0.05" value="0" style="width:100%;accent-color:var(--acc)" oninput="$('m-sharpen-val').textContent=this.value>0?('强度 '+this.value):'关'"></div>
+          <div class="field" style="grid-column:1/-1"><label>自定义编码器参数（key=value 逗号分隔，如 cq=22,rc-lookahead=32）</label><input id="m-encset" placeholder="留空用默认"></div>
+          <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input id="m-retarget" type="checkbox"> 60fps→30fps 重定向（半帧处理，提速一倍）</label></div>
+          <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input id="m-fmp4" type="checkbox"> fMP4 流式封装（处理中即可播放）</label></div>
+        </div>
+      </details>
+
+      <details class="sect">
+        <summary>导出后动作</summary>
+        <div class="grid2">
+          <div class="field"><label>完成后</label><select id="m-pea" onchange="$('m-pec').parentElement.style.display=this.value==='command'?'':'none'"><option value="">无</option><option value="del_source">删除源片（处理成功后）</option><option value="command">执行自定义命令</option></select></div>
+          <div class="field" style="display:none"><label>命令（容器内执行，如 curl 通知）</label><input id="m-pec" placeholder="例如：curl -s http://…/notify"></div>
+        </div>
+        <div class="dim">关机动作不提供（Spark 为共享设备）。</div>
+      </details>
+
+      <div class="dim" style="border-top:1px solid var(--line);padding-top:10px;margin-top:4px">
+        以下 GUI 功能在此部署不可用（平台/授权限制）：SD 1.5 图像修复 · unet-4x 二级放大 · RTX Super Resolution · Topaz Video AI
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end; gap:10px; margin-top:6px">
+      <button class="btn sec" onclick="closeModal()">取消</button>
+      <button class="btn" id="m-submit" onclick="submitJob()">开始处理</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 详情抽屉：桌面右侧栏 / 移动端底部 sheet ===== -->
+<div id="drawer-bg" onclick="closeDrawer()"></div>
+<div id="drawer">
+  <div class="row" style="justify-content:space-between; align-items:flex-start">
+    <div style="min-width:0">
+      <div style="font-weight:600; overflow-wrap:anywhere" id="d-title">—</div>
+      <div class="dim" id="d-sub" style="margin-top:2px"></div>
+    </div>
+    <button class="btn sec mini" onclick="closeDrawer()">关闭</button>
+  </div>
+  <div id="d-progress" style="margin-top:12px; display:none">
+    <div class="pbar" style="height:10px"><div id="d-pbar"></div></div>
+    <div class="dim" id="d-ptext" style="margin-top:6px"></div>
+  </div>
+  <div class="d-sect"><div class="kv" id="d-kv"></div></div>
+  <div class="d-sect" id="d-log-sect" style="display:none">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px">
+      <strong style="font-size:13.5px">日志</strong>
+      <div class="actions">
+        <label class="dim" style="display:flex;gap:4px;align-items:center"><input id="d-follow" type="checkbox" checked> 跟随</label>
+        <button class="btn sec mini" onclick="drawerExportLog()">导出</button>
+      </div>
+    </div>
+    <pre class="log" id="d-log" style="max-height:40vh"></pre>
+  </div>
+  <div class="d-sect"><div class="actions" id="d-actions"></div></div>
+  <div class="d-sect" id="d-hist-sect" style="display:none">
+    <strong style="font-size:13.5px">同源历史 <span class="dim" id="d-hist-n"></span></strong>
+    <div id="d-hist" style="margin-top:8px; display:grid; gap:6px"></div>
+  </div>
+</div>
+
+<!-- ===== 片段/原片预览（修复范围 tab 双击与素材库预览共用） ===== -->
+<div class="modal-bg" id="spanpv">
+  <div class="modal" style="width:min(860px,94vw); padding:14px 16px">
+    <div class="row" style="justify-content:space-between; margin-bottom:10px">
+      <h3 style="margin:0; font-size:16px" id="spanpv-title">原片预览</h3>
+      <button class="btn sec mini" onclick="closeSpanPv()">关闭</button>
+    </div>
+    <video id="spanpv-video" controls playsinline style="width:100%; max-height:70vh; background:#000; border-radius:8px"></video>
+    <div class="row" style="margin-top:6px; justify-content:space-between; flex-wrap:wrap; gap:8px">
+      <span class="dim">原始画面预览（自动跳到对应位置）</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 成品预览 / 原片对比（滑块分割线 + 并排；须在脚本前，静态监听要绑到元素） ===== -->
+<div class="modal-bg" id="pvmodal">
+  <div class="modal" style="width:min(1000px,96vw); padding:14px 16px">
+    <div class="row" style="justify-content:space-between; margin-bottom:10px">
+      <h3 style="margin:0; font-size:16px" id="pv-out-title">成品预览</h3>
+      <div class="row" style="gap:6px">
+        <span class="seg" id="pv-mode-seg" style="display:none">
+          <button data-pv="slider" class="on" onclick="setPvMode('slider')">滑块对比</button>
+          <button data-pv="sbs" onclick="setPvMode('sbs')">并排</button>
+        </span>
+        <button class="btn sec mini" onclick="closePreview()">关闭</button>
+      </div>
+    </div>
+    <div class="cmp-wrap slider" id="cmp-wrap">
+      <video id="cmp-after" playsinline></video>
+      <div class="cmp-clip" id="cmp-clip"><video id="cmp-before" muted playsinline></video></div>
+      <div class="cmp-handle" id="cmp-handle"><span>⇔</span></div>
+      <span class="cmp-tag l">原始</span><span class="cmp-tag r">成品</span>
+    </div>
+    <div class="row" style="margin-top:8px; gap:10px">
+      <button class="btn sec mini" id="cmp-play" onclick="cmpToggle()">▶ 播放</button>
+      <input id="cmp-seek" type="range" min="0" max="100" value="0" style="flex:1;accent-color:var(--acc)">
+      <span class="dim" id="cmp-time"></span>
+    </div>
+    <div class="dim" style="margin-top:6px" id="pv-note"></div>
+  </div>
+</div>
+
+<!-- ===== 素材删除确认（占用保护在后端：409 = 有任务/扫描/上传会话在用该片） ===== -->
+<div class="modal-bg" id="delmodal">
+  <div class="modal" style="width:min(560px,94vw)">
+    <h3 id="del-title">删除素材</h3>
+    <div id="del-body" class="dim" style="margin:4px 0 14px; line-height:2; word-break:break-all"></div>
+    <div class="row" style="justify-content:flex-end; gap:10px">
+      <button class="btn sec" onclick="closeDelModal()">取消</button>
+      <button class="btn danger" onclick="confirmDel()">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 存网盘改走平台目录 picker（0.1.22 去桥），原 savemodal 弹窗删除 -->
+
+<!-- ===== 首次启动使用演示（空态自动弹；页头 ? 重开；一键体验走真实全链） ===== -->
+<div class="modal-bg" id="welcomemodal">
+  <div class="modal" style="width:min(640px,94vw)">
+    <h3 style="margin:0 0 6px">欢迎使用 Jasna 视频修复工作台</h3>
+    <div class="dim" style="margin-bottom:4px">上传带马赛克的视频 → 自动扫描定位 → 神经网络修复 → 成品入库 / 保存到懒猫网盘。需要懒猫 AI 算力舱在线。</div>
+    <div class="welcome-steps">
+      <div class="wstep"><b>1 上传</b><span class="dim">本地或懒猫网盘</span></div>
+      <div class="wstep"><b>2 扫描</b><span class="dim">自动检出马赛克段</span></div>
+      <div class="wstep"><b>3 修复</b><span class="dim">TRT 推理·断点续跑</span></div>
+      <div class="wstep"><b>4 成品</b><span class="dim">对比预览·存网盘</span></div>
+    </div>
+    <div class="card dim" style="margin:0 0 12px; font-size:12.5px">⚙ 首次使用会先编译 TensorRT 引擎（约 15-60 分钟，编译一次永久生效，进度见任务日志）；修复耗时随素材时长与检出段数变化。</div>
+    <div class="row" style="justify-content:flex-end; gap:10px; flex-wrap:wrap">
+      <button class="btn sec" onclick="closeWelcome()">我自己上传</button>
+      <button class="btn" id="wc-go" onclick="welcomeRunDemo()">▶ 一键体验（10 秒演示片）</button>
+    </div>
+    <div class="dim" style="margin-top:8px; font-size:12px">演示素材为上游官方 10 秒 1080p 测试片（随应用内置，1.2MB）；演示产物可随时删除。</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+ * Jasna 工作台 v0.14.0 — 媒体化改版（对标 Topaz/画廊型）：缩略图引擎+卡片媒体化、
+ *   成品对比预览（滑块/并排/单画面）、同源历史内联展开（与抽屉共用 histRowHtml）；
+ * 此前：v0.13.x 解耦凝练、v0.12.12 P0 五项
+ * 模块划分沿用上游 gui/ 结构：
+ *   models → upload engine（分片断点续传）→ task list（统一列表）
+ *   → drawer 详情 → job modal（单个/批量）→ library 多选
+ *   → mosaic_scan/segment_editor → restoration_preview
+ *   → system_stats → 懒猫网盘（平台通道：WebDAV + file-pickers，0.1.22 去桥）
+ * ============================================================ */
+const WEB = '/wapi';
+/* 直连候选链：仅剩用户手填的 jasna_direct（高级用法，设置里写地址）。
+   0.1.22 去设备绑定：硬编码兜底 IP 与后端 lan_hint（JASNA_LAN_HINT env 已删）全部移除——
+   商店版任意用户设备 IP 不同，上传/下载全走域名通道；候选为空时 auto 恒落 WEB。
+   lan_hint 探测保留（当前后端不再下发，属无害空转），为后续 lan-info 动态发现留位。 */
+const DIRECT_CANDIDATES = [];
+if (localStorage.getItem('jasna_direct')) DIRECT_CANDIDATES.push(localStorage.getItem('jasna_direct'));
+let DIRECT = DIRECT_CANDIDATES[0];
+let DIRECT_BASE = null;          // 自动探测结果；null = 域名链路
+const $ = id => document.getElementById(id);
+function UP(api) { return (DIRECT_BASE || WEB) + api }
+(async () => {
+  try { const c = new AbortController(); setTimeout(() => c.abort(), 2500);   // 拉取 lan_hint
+    const st = await (await fetch(WEB + '/stats', {signal: c.signal})).json();
+    if (st && st.lan_hint && !DIRECT_CANDIDATES.includes(st.lan_hint)) {
+      DIRECT_CANDIDATES.unshift(st.lan_hint); DIRECT = DIRECT_CANDIDATES[0];
+    }
+  } catch (e) {}
+  for (const cand of DIRECT_CANDIDATES) {
+    try { const c = new AbortController(); setTimeout(() => c.abort(), 1500);
+      await fetch(cand + '/models', {signal: c.signal}); DIRECT_BASE = cand; break;
+    } catch (e) {}
+  }
+  if (DIRECT_BASE && typeof loadOutputs === 'function') loadOutputs();
+  renderChannel();
+})();
+
+/* ===== models：常量（gui/models.py + detection_registry 对应） ===== */
+const DET_LABEL = {
+  'rfdetr-v6-large': 'rfdetr-v6-large（默认·召回最好）', 'rfdetr-v6': 'rfdetr-v6（快）',
+  'rfdetr-vr-v1': 'rfdetr-vr-v1（VR180）', 'lada-yolo-v4': 'lada-yolo-v4（快速·密集段适用）',
+  'lada-yolo-v2': 'lada-yolo-v2', 'zelefans-vr-yolo-v2': 'zelefans-vr-yolo-v2（VR）',
+};
+const DET_ORDER = ['rfdetr-v6-large', 'lada-yolo-v4', 'rfdetr-v6', 'rfdetr-vr-v1', 'lada-yolo-v2', 'zelefans-vr-yolo-v2'];
+const DET_THR = {'rfdetr-v6-large': 0.30, 'rfdetr-v6': 0.35, 'rfdetr-vr-v1': 0.40,
+                 'lada-yolo-v2': 0.25, 'lada-yolo-v4': 0.25, 'zelefans-vr-yolo-v2': 0.25};
+function fillDetSelect(selEl, dets) {
+  const names = dets.map(d => d[0]).sort((a, b) => {
+    const ia = DET_ORDER.indexOf(a), ib = DET_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  names.forEach(name => { const o = document.createElement('option'); o.value = name; o.textContent = DET_LABEL[name] || name; selEl.append(o) });
+  if (names.includes('rfdetr-v6-large')) selEl.value = 'rfdetr-v6-large';
+}
+function detThresholdHint() {
+  const v = $('m-det').value, rec = DET_THR[v];
+  if (rec != null) { $('m-thr-hint').textContent = '（' + v + ' 推荐 ' + rec + '）'; $('m-threshold').value = rec }
+  else $('m-thr-hint').textContent = '';
+}
+let models = null;
+let mediaTab = 'outputs';   // 媒体库子 tab（默认成品库）
+function setMediaTab(which) {
+  mediaTab = which;
+  ['outputs','library'].forEach(t => {
+    const chip = $('mtab-'+t), pane = $('media-'+t);
+    if (chip) chip.classList.toggle('on', t === which);
+    if (pane) pane.style.display = t === which ? '' : 'none';
+  });
+  if (which === 'outputs') loadOutputs(); else loadVideos();
+}
+async function loadSpace() {
+  try {
+    const d = await (await fetch(WEB + '/space')).json();
+    const G = 1073741824;
+    // 语义三分（2026-09-06）：保留=蓝系 / 可回收=红系 / 中性=灰阶——红色就是能动手删的
+    const seg = (b, c, ti) => b > 0 ? `<div title="${ti}" style="flex:${Math.max(0.15, b)};background:${c}"></div>` : '';
+    $('space-bar').innerHTML = [
+      [Math.max(0, d.outputs.bytes - d.stale.bytes), '#58a6ff', '成品·最新版（保留）'],
+      [d.videos.bytes, '#a5d6ff', '素材库（保留）'],
+      [d.stale.bytes, '#f85149', '成品·旧版（可回收）'],
+      [d.temp.bytes, '#f0883e', '临时：上传会话+断点目录（可回收）'],
+      [d.misc.bytes, '#484f58', '日志/扫描缓存'],
+      [d.other, '#30363d', '其他（系统等）'],
+      [d.avail, '#21262d', '可用'],
+    ].map(p => seg(...p)).join('');
+    const f = b => (b / G).toFixed(1) + 'G';
+    const keep = Math.max(0, d.outputs.bytes - d.stale.bytes) + d.videos.bytes;
+    const reclaim = d.stale.bytes + d.temp.bytes;
+    const acts = (d.stale.bytes > 0 ? ` <button class="btn mini" style="background:#f85149;border-color:#f85149;color:#fff" onclick="clearStaleAll()">✕ 清旧版 ${f(d.stale.bytes)}</button>` : '') +
+                 (d.temp.bytes > 0 ? ` <button class="btn mini" style="background:#f0883e;border-color:#f0883e;color:#fff" onclick="cleanTempNow()">✕ 清临时 ${f(d.temp.bytes)}</button>` : '');
+    $('space-legend').innerHTML =
+      `保留 <b style="color:#58a6ff">${f(keep)}</b>（成品 ${f(d.outputs.bytes - d.stale.bytes)} + 素材 ${f(d.videos.bytes)}）` +
+      (reclaim > 0
+        ? ` · <span style="color:#f85149;font-weight:700">可回收 ${f(reclaim)}</span>（旧版 ${d.stale.count} 个 + 临时 ${f(d.temp.bytes)}）`
+        : ` · <span style="color:#3fb950">✔ 无可回收空间</span>`) +
+      ` · 其他 ${f(d.other + d.misc.bytes)} · 可用 <b style="color:#3fb950">${f(d.avail)}</b> / 共 ${f(d.total)}` +
+      (acts ? `<div style="margin-top:6px">${acts}</div>` : '');
+    $('space-note').textContent = '';
+  } catch (e) {}
+}
+async function clearStaleAll() {
+  if (!confirm('清理全部成品旧版本？每组保留最新一个，收藏（★）自动跳过。不可恢复。')) return;
+  const d = await (await fetch(WEB + '/outputs/clear-stale', {method:'POST'})).json();
+  if (d.error) return alert(d.error);
+  alert('已清理 ' + d.deleted + ' 个旧版，释放 ' + (d.freed / 1073741824).toFixed(1) + 'G' +
+        (d.skipped_fav ? '（跳过收藏 ' + d.skipped_fav + ' 个）' : ''));
+  loadSpace(); loadOutputs();
+}
+async function cleanTempNow() {
+  if (!confirm('清理临时区（超 1 小时的上传会话 + 无任务引用的断点目录）？')) return;
+  const d = await (await fetch(WEB + '/space/clean-temp', {method:'POST'})).json();
+  if (d.error) return alert(d.error);
+  alert('已释放 ' + (d.freed / 1073741824).toFixed(1) + 'G（会话 ' + d.sessions + ' · 断点目录 ' + d.workdirs + '）');
+  loadSpace();
+}
+setInterval(() => {   // 媒体库可见时每 30s 刷新占用（15s 服务端缓存）
+  if (!document.hidden && $('tab-media') && $('tab-media').style.display !== 'none') loadSpace();
+}, 30000);
+function tab(name) {
+  document.querySelectorAll('nav.top button, .tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  ['tasks','media','segments'].forEach(t => { const el = $('tab-'+t); if (el) el.style.display = t === name ? '' : 'none' });
+  if (name === 'media') { loadSpace(); setMediaTab(mediaTab) }
+}
+function fmtDur(s){ if(!s) return '-'; const m=Math.floor(s/60); return m>=60 ? Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')+'m' : m+':'+String(Math.round(s%60)).padStart(2,'0') }
+function fmtTs(s){ return Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0') }
+function fmtSize(mb){ return mb >= 1024 ? (mb/1024).toFixed(1)+'GB' : mb.toFixed(1)+'MB' }
+
+/* ===== 上传通道：显式三档滑块（auto/direct/domain），localStorage 持久 ===== */
+function channelMode() { return localStorage.getItem('jasna_channel') || 'auto' }
+function resolveBase(mode) {
+  if (mode === 'direct') return DIRECT || WEB;   // 无直连候选时落域名（商店版常态）
+  if (mode === 'domain') return WEB;
+  return DIRECT_BASE || WEB;   // auto
+}
+function setChannel(m) {
+  localStorage.setItem('jasna_channel', m);
+  renderChannel();
+}
+function renderChannel() {
+  const m = channelMode();
+  const sel = $('ch-sel');
+  if (sel) sel.value = m;
+  const eff = resolveBase(m);
+  const st = $('state');
+  if (st && st.dataset.base === '1') {
+    st.textContent = '服务正常 · ' + (eff === WEB ? '域名链路' : '直连' + (lastSpeed.direct ? ' ' + lastSpeed.direct + 'MB/s' : ''));
+  }
+}
+const lastSpeed = JSON.parse(localStorage.getItem('jasna_speed') || '{}');
+function noteSpeed(base, mbps) { if (mbps > 0) { lastSpeed[base === WEB ? 'domain' : 'direct'] = Math.round(mbps); localStorage.setItem('jasna_speed', JSON.stringify(lastSpeed)); renderChannel() } }
+
+/* ===== 上传引擎：分片 + 断点续传 + 暂停/重试 + 并发≤2（状态放任务列表） ===== */
+const MAX_UPLOAD_SLOTS = 2;
+const UPLOAD_PART = 32 * 1024 * 1024;   // 与后端 UPLOAD_PART_SIZE 对齐
+let uploadRows = [];
+try { uploadRows = JSON.parse(localStorage.getItem('jasna_uploads') || '[]') } catch (e) { uploadRows = [] }
+function saveUploadRows() {
+  try { localStorage.setItem('jasna_uploads', JSON.stringify(
+    uploadRows.map(r => ({uid:r.uid, name:r.name, size:r.size, state:r.state, base:r.base,
+                          channel:r.channel, total:r.total, received:r.received, created:r.created,
+                          part_size:r.part_size, autofired:r.autofired})))) } catch (e) {}
+}
+function uploadRowByUid(uid) { return uploadRows.find(r => r.uid === uid) }
+let uploadingCount = 0;
+
+/* ---- 上传句柄持久化（File System Access API）：刷新后「继续」免重选文件 ----
+   Chrome/Edge 经 showOpenFilePicker / getAsFileSystemHandle 拿 FileSystemFileHandle
+   （可 IndexedDB 结构化克隆存续），刷新后 resume 时一次授权即恢复 File；
+   Firefox/Safari 无此 API 自动回退旧的「重选文件」路径。 */
+let _handleDb = null;
+function handleDb() {
+  return new Promise(res => {
+    if (_handleDb) return res(_handleDb);
+    try {
+      const rq = indexedDB.open('jasna-uploads', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('handles');
+      rq.onsuccess = () => { _handleDb = rq.result; res(_handleDb) };
+      rq.onerror = () => res(null);
+    } catch (e) { res(null) }
+  });
+}
+function putHandle(uid, h) {
+  if (!h) return;
+  handleDb().then(db => { if (!db) return;
+    try { db.transaction('handles', 'readwrite').objectStore('handles').put(h, uid) } catch (e) {} });
+}
+function takeHandle(uid) {
+  return handleDb().then(db => new Promise(res => {
+    if (!db) return res(null);
+    try {
+      const rq = db.transaction('handles').objectStore('handles').get(uid);
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => res(null);
+    } catch (e) { res(null) }
+  }));
+}
+function delHandle(uid) {
+  handleDb().then(db => { if (!db) return;
+    try { db.transaction('handles', 'readwrite').objectStore('handles').delete(uid) } catch (e) {} });
+}
+
+async function startUploads(files, handles) {
+  for (let fi = 0; fi < files.length; fi++) {
+    const f = files[fi];
+    const mode = channelMode();
+    let base = resolveBase(mode), usedMode = mode;
+    let d = null;
+    try {
+      d = await (await fetch(base + '/upload-session', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name: f.name, size: f.size})})).json();
+      if (d.error && mode === 'auto' && base !== WEB) { base = WEB; usedMode = 'domain'; d = await (await fetch(base + '/upload-session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: f.name, size: f.size})})).json() }
+    } catch (e) {
+      if (mode === 'auto' && base !== WEB) { base = WEB; usedMode = 'domain';
+        try { d = await (await fetch(base + '/upload-session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: f.name, size: f.size})})).json() } catch (e2) { d = {error: String(e2)} }
+      } else d = {error: String(e)};
+    }
+    if (!d || d.error || !d.upload_id) {
+      uploadRows.unshift({uid: 'err-' + Date.now() + Math.random().toString(36).slice(2,5), name: f.name, size: f.size/1048576,
+        state: 'failed', base, channel: usedMode, total: 0, received: 0, created: Date.now()/1000, err: '会话创建失败：' + (d && d.error || '无响应')});
+      saveUploadRows(); renderTasks(); continue;
+    }
+    uploadRows.unshift({uid: d.upload_id, name: f.name, size: f.size/1048576, state: 'waiting',
+      base, channel: usedMode, total: d.total_parts, part_size: d.part_size, received: 0,
+      created: Date.now()/1000, file: f});
+    putHandle(d.upload_id, handles && handles[fi]);
+    saveUploadRows();
+  }
+  renderTasks(); pumpUploads();
+}
+async function pumpUploads() {
+  while (uploadingCount < MAX_UPLOAD_SLOTS) {
+    const row = uploadRows.find(r => r.state === 'waiting');
+    if (!row) return;
+    runUploadRow(row);
+  }
+}
+async function runUploadRow(row) {
+  uploadingCount++;
+  row.state = 'uploading'; row.speed = 0; row.sentBytes0 = 0; renderTasks();
+  const t0 = Date.now();
+  try {
+    while (true) {
+      if (row.stopReq) { row.state = 'paused'; saveUploadRows(); break }
+      // 服务端 received_parts 是断点续传的唯一事实源
+      const sess = await (await fetch(row.base + '/upload-session/' + row.uid)).json();
+      if (sess.error) { row.state = 'failed'; row.err = '会话不存在（可能已被合并）'; saveUploadRows(); break }
+      row.total = sess.total_parts;
+      const got = new Set(sess.received_parts);
+      row.received = got.size;
+      const missing = [];
+      for (let i = 0; i < sess.total_parts; i++) if (!got.has(i)) missing.push(i);
+      if (!missing.length) {
+        const fin = await (await fetch(row.base + '/upload-session/' + row.uid + '/complete', {method:'POST', headers:{'Content-Type':'application/json'}, body: '{}'})).json();
+        if (fin.ok) { row.state = 'ready'; row.received = row.total; noteSpeed(row.base, row.speed); delHandle(row.uid); saveUploadRows(); if (typeof loadVideos === 'function') loadVideos(); afterIngest(row.name) }
+        else { row.state = 'failed'; row.err = '合并失败：' + (fin.error || '未知'); saveUploadRows() }
+        break;
+      }
+      const n = missing[0];
+      const file = row.file; // 仅本次页面会话内有效；刷新后需重选文件续传（已传分片保留在服务端）
+      if (!file) { row.state = 'paused'; row.err = '页面刷新过，点「继续」续传（Chrome 免重选，仅需一次授权）'; saveUploadRows(); break }
+      // 与后端切片规则一致：固定片大小，末片允许更小
+      const partSize = row.part_size || UPLOAD_PART;
+      const sizeBytes = row.size * 1048576;
+      const blob = file.slice(n * partSize, Math.min(sizeBytes, (n + 1) * partSize));
+      const ok = await new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', row.base + '/upload-session/' + row.uid + '/' + n);
+        xhr.upload.onprogress = (e) => {
+          const secs = Math.max(0.5, (Date.now() - t0) / 1000);
+          row.speed = (row.sentBytes0 + (e.lengthComputable ? e.loaded : 0)) / 1048576 / secs;
+          scheduleRender();
+        };
+        xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+        xhr.onerror = () => resolve(false);
+        xhr.send(blob);
+      });
+      if (!ok) { row.retries = (row.retries || 0) + 1;
+        if (row.retries >= 4) { row.state = 'failed'; row.err = '分片 ' + n + ' 连续失败（检查通道/网络）'; saveUploadRows(); break }
+        await new Promise(r2 => setTimeout(r2, 1500 * row.retries)); continue }
+      row.retries = 0;
+      row.sentBytes0 += blob.size; row.received = got.size + 1;
+      saveUploadRows(); renderTasks();
+    }
+  } catch (e) { row.state = 'failed'; row.err = String(e); saveUploadRows() }
+  uploadingCount--;
+  renderTasks();
+  pumpUploads();
+}
+function pauseUpload(uid) { const r = uploadRowByUid(uid); if (r && r.state === 'uploading') { r.stopReq = true; renderTasks() } }
+async function resumeUpload(uid) {
+  const r = uploadRowByUid(uid);
+  if (!r || (r.state !== 'paused' && r.state !== 'failed')) return;
+  if (!r.file && (r.received || 0) < (r.total || 1)) {
+    // 优先用持久化句柄恢复：刷新/重启后点「继续」一次授权即续传，无需重新找文件
+    const h = await takeHandle(r.uid);
+    if (h) {
+      try {
+        let perm = 'granted';
+        try { perm = await h.queryPermission({ mode: 'read' }) } catch (e) {}
+        if (perm !== 'granted') perm = await h.requestPermission({ mode: 'read' });
+        if (perm === 'granted') {
+          const f = await h.getFile();
+          if (f && f.name === r.name && Math.abs(f.size / 1048576 - r.size) < 1) r.file = f;
+        }
+      } catch (e) {}
+    }
+    if (!r.file) {
+      // 无句柄（浏览器不支持/授权被拒/文件已被移动改名）：回退手动重选（已传分片在服务端）
+      pendingResumeUid = uid; $('reattach-input').click(); return;
+    }
+  }
+  r.stopReq = false; r.retries = 0; r.err = null; r.sentBytes0 = 0; r.state = 'waiting';
+  saveUploadRows(); renderTasks(); pumpUploads();
+}
+let pendingResumeUid = null;
+function reattachFile(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  const r = uploadRowByUid(pendingResumeUid);
+  pendingResumeUid = null;
+  if (!f || !r) return;
+  if (f.name !== r.name && !confirm('所选文件名（' + f.name + '）与任务（' + r.name + '）不一致，仍要续传到该任务？')) return;
+  r.file = f; r.stopReq = false; r.retries = 0; r.err = null; r.sentBytes0 = 0; r.state = 'waiting';
+  saveUploadRows(); renderTasks(); pumpUploads();
+}
+function retryUploadOther(uid) {
+  const r = uploadRowByUid(uid);
+  if (!r || r.state !== 'failed') return;
+  const other = r.base === WEB ? DIRECT : WEB;
+  if (!other) { alert('没有可切换的局域网直连地址（可在设置里手填直连地址后重试）'); return }
+  r.base = other;
+  r.channel = r.base === WEB ? 'domain' : 'direct';
+  resumeUpload(uid);
+}
+function cancelUpload(uid) {
+  const i = uploadRows.findIndex(r => r.uid === uid);
+  if (i >= 0) {
+    const r = uploadRows[i];
+    const base = r.base || WEB;
+    r.stopReq = true; delHandle(uid); if (r._objUrl) URL.revokeObjectURL(r._objUrl); uploadRows.splice(i, 1); saveUploadRows(); renderTasks(); if (r.state === 'uploading') setTimeout(pumpUploads, 3000);
+    // 取消即清服务端会话（否则分片永久占盘、还会挡素材删除 409）
+    fetch(base + '/upload-session/' + uid, { method: 'DELETE' }).catch(() => {})
+  }
+}
+function dismissUpload(uid) { const i = uploadRows.findIndex(r => r.uid === uid); if (i >= 0) { delHandle(uid); if (uploadRows[i]._objUrl) URL.revokeObjectURL(uploadRows[i]._objUrl); uploadRows.splice(i, 1); saveUploadRows(); renderTasks() } }
+// 页面加载：把中断的上传行恢复（服务端分片还在 → 自动继续传）
+(async () => {
+  const alive = [];
+  for (const r of uploadRows) {
+    if (r.state === 'uploading' || r.state === 'waiting') {
+      try {
+        const sess = await (await fetch(r.base + '/upload-session/' + r.uid)).json();
+        if (sess.error) { r.state = 'failed'; r.err = '会话丢失（服务端重启/已合并）' }
+        else { r.total = sess.total_parts; r.received = sess.received_parts.length; r.state = 'waiting' }
+      } catch (e) { r.state = 'failed'; r.err = '会话查询失败：' + e }
+    }
+    alive.push(r);
+  }
+  uploadRows = alive; saveUploadRows();
+  // 延迟到脚本求值结束后再渲染：同步调 renderTasks 会在 jobList 声明前触发 TDZ（冷启动报错）
+  setTimeout(() => { if (typeof renderTasks === 'function') renderTasks(); pumpUploads() }, 0);
+})();
+// 选择文件（chooser / 库页共用）
+const FS_PICK_TYPES = [{ description: '视频', accept: { 'video/*': ['.mp4', '.mkv', '.mov', '.avi', '.ts', '.wmv', '.flv', '.webm', '.m4v'] } }];
+async function pickUploadFiles() {
+  // 句柄化选择（Chrome/Edge）：句柄进 IndexedDB，刷新后「继续」免重选文件
+  if (window.showOpenFilePicker) {
+    try {
+      const hs = await window.showOpenFilePicker({ multiple: true, types: FS_PICK_TYPES });
+      const files = [], handles = [];
+      for (const h of hs) { files.push(await h.getFile()); handles.push(h) }
+      startUploads(files, handles); closeModal(); tab('tasks');
+      return;
+    } catch (e) { if (e && e.name === 'AbortError') return; /* 其余异常回退传统选择 */ }
+  }
+  $('upload-input').click();
+}
+
+/* ===== 缩略图引擎：同源抽帧 + 双级缓存 + 占位水合（v0.14.0）=====
+ * 一律走 WEB 同源路径（/wapi/media、/wapi/outputs）：跨域视频会污染 canvas，
+ * toDataURL 直接抛 SecurityError。抽帧失败（HEVC 无法解码/mkv 等）静默回退占位符。 */
+const thumbMem = new Map();
+let thumbStoreCache = null;
+function thumbStore() {
+  if (thumbStoreCache) return thumbStoreCache;
+  try { thumbStoreCache = JSON.parse(localStorage.getItem('jasna_thumbs') || '{}') } catch (e) { thumbStoreCache = {} }
+  return thumbStoreCache;
+}
+function thumbSave(store) {
+  try { localStorage.setItem('jasna_thumbs', JSON.stringify(store)) }
+  catch (e) {   // 超限丢最旧一半再试一次
+    Object.keys(store).sort((a, b) => (store[a].t || 0) - (store[b].t || 0)).slice(0, Math.ceil(Object.keys(store).length / 2)).forEach(k => delete store[k]);
+    try { localStorage.setItem('jasna_thumbs', JSON.stringify(store)) } catch (e2) { thumbStoreCache = {} }
+  }
+}
+const thumbPending = new Map();
+function getThumb(src, cb) {
+  if (thumbMem.has(src)) { cb(thumbMem.get(src)); return }
+  const hit = thumbStore()[src];
+  if (hit) { thumbMem.set(src, hit.d); cb(hit.d); return }
+  if (thumbPending.has(src)) { thumbPending.get(src).push(cb); return }
+  const cbs = [cb];
+  thumbPending.set(src, cbs);
+  extractFrame(src, d => {
+    thumbPending.delete(src);
+    if (d) {
+      thumbMem.set(src, d);
+      const s2 = thumbStore();
+      s2[src] = { d, t: Date.now() };
+      thumbSave(s2);
+    } else {
+      thumbMem.set(src, '');   // 负缓存：失败/超时不记录会在渲染风暴下无限重试解码
+    }
+    cbs.forEach(f => f(d));
+  });
+}
+let exActive = 0;
+const exQueue = [];
+function extractFrame(src, cb) {   // 并发≤3，避免整列表同时起解码器
+  const run = () => { exActive++; doExtract(src, d => { exActive--; if (exQueue.length) exQueue.shift()(); cb(d) }) };
+  exActive < 3 ? run() : exQueue.push(run);
+}
+function doExtract(src, cb) {
+  const v = document.createElement('video');
+  v.muted = true; v.preload = 'metadata'; v.src = src;
+  let done = false;
+  const finish = d => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    v.removeAttribute('src');
+    try { v.load() } catch (e) {}
+    cb(d);
+  };
+  const timer = setTimeout(() => finish(null), 12000);
+  v.addEventListener('loadedmetadata', () => {
+    try { v.currentTime = Math.min(3, Math.max(0.5, (v.duration || 4) * 0.1)) } catch (e) { finish(null) }
+  });
+  v.addEventListener('seeked', () => {
+    try {
+      const c = document.createElement('canvas');
+      const ar = (v.videoWidth || 16) / (v.videoHeight || 9);
+      c.width = 160; c.height = Math.max(60, Math.round(160 / ar));
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      finish(c.toDataURL('image/jpeg', 0.6));
+    } catch (e) { finish(null) }
+  });
+  v.addEventListener('error', () => finish(null));
+}
+function thumbHtml(src) {
+  return '<div class="thumb" data-thumb="' + escH(src) + '"><span class="thumb-ph">▶</span></div>';
+}
+function hydrateThumbs(root) {
+  (root || document).querySelectorAll('.thumb[data-thumb]').forEach(el => {
+    getThumb(el.dataset.thumb, d => { if (d && el.isConnected) el.innerHTML = '<img alt="" src="' + d + '">' });
+  });
+}
+
+/* ===== 任务列表：上传 + 加工统一渲染 ===== */
+let jobList = [], taskFilter = 'all', jobsBusy = false;
+function setFilter(f) {
+  taskFilter = f;
+  document.querySelectorAll('#task-chips .chip').forEach(c => c.classList.toggle('on', c.dataset.f === f));
+  renderTasks();
+}
+function taskBucket(r) {
+  if (r.kind === 'u') {
+    if (r.state === 'uploading') return 'active';
+    if (r.state === 'waiting') return 'pending';
+    if (r.state === 'ready') {   // 暂存态：扫描中归"等待"，就绪/未检出归"待继续"（等用户发起）
+      const sc = scanStateFor(r.name);
+      return (sc && (sc.state === 'queued' || sc.state === 'running')) ? 'pending' : 'revive';
+    }
+    return 'revive';   // paused / failed
+  }
+  if (r.state === 'running') return 'active';
+  if (r.state === 'paused') return 'revive';
+  if (r.state === 'queued' || r.state === 'cancelling') return 'pending';
+  if (r.state === 'failed' || r.state === 'interrupted') return 'revive';
+  return 'done';       // done / cancelled
+}
+function escH(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+function updateBatchPreview() {
+  const el = $('m-pattern-preview');
+  if (!el) return;
+  if (!batchList || !batchList.length) { el.textContent = ''; return }
+  const pat = $('m-pattern').value.trim() || '{original}-restored';
+  const ext = $('m-container').value;
+  const demo = pat.replace('{original}', batchList[0].name.replace(/\.[^.]+$/, '')) + (/\.(mp4|mkv)$/i.test(pat) ? '' : '.' + ext);
+  el.textContent = '示例：' + batchList[0].name + ' → ' + demo + (batchList.length > 1 ? '（等 ' + batchList.length + ' 个文件）' : '');
+}
+function queueEtaText(j) {
+  // 粗估：按前面任务剩余时间累加（无 fps 的按 8fps 兜底）
+  const est = x => (x.total_frames && x.fps) ? x.total_frames * (1 - (x.progress_pct || 0) / 100) / x.fps
+              : (x.total_frames ? x.total_frames / 8 : 0);
+  let sec = 0;
+  jobList.filter(x => (x.state === 'running' || x.state === 'queued' || x.state === 'paused') && x.created_at < j.created_at)
+    .forEach(x => { sec += est(x) });
+  return sec > 0 ? '预计约 ' + fmtDur(Math.max(60, Math.round(sec))) + ' 后开始' : '';
+}
+function jobEta(j) {
+  if (!j.fps || !j.total_frames) return '';
+  const remainSec = j.total_frames * (1 - (j.progress_pct || 0) / 100) / j.fps;
+  if (!isFinite(remainSec) || remainSec <= 0) return '';
+  return ' · ETA ' + fmtDur(remainSec);
+}
+let _renderTimer = null;
+function scheduleRender() {   // 高频进度事件合并渲染（200ms/帧）：xhr onprogress 每秒可达上百次
+  if (_renderTimer) return;
+  _renderTimer = setTimeout(() => { _renderTimer = null; renderTasks() }, 200);
+}
+function renderTasks() {
+  const wrap = $('task-list');
+  if (!wrap) return;
+  // 联动去重（一个视频只有一个"活动代表"）：同源 job 存在时，已入库的上传行自动退场，
+  // 展示职责移交加工行；失败/暂停中的上传行不受影响（仍需用户介入）
+  const srcNames = new Set(jobList.map(j => (j.input || '').split('/').pop()));
+  const view = [];
+  uploadRows.forEach(r => {
+    if (r.state === 'ready' && srcNames.has(r.name)) return;
+    view.push(Object.assign({kind: 'u'}, r));
+  });
+  // 按源视频聚合：一个源一行（代表 = 最高优先级非终态，否则最新终态），其余收进同源历史
+  const groups = new Map();
+  jobList.forEach(j => {
+    const key = (j.input || '').split('/').pop();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(j);
+  });
+  // 代表选择：非终态优先（需用户介入）；终态里 done 最优先——只要该源成功过一次，
+  // 卡片永远展示成品，失败记录退进同源历史（v0.12.12 修复成品被失败记录埋掉）
+  const PRI = {running: 0, paused: 1, queued: 2, cancelling: 3, done: 4, failed: 5, interrupted: 6, cancelled: 7};
+  groups.forEach(jobs => {
+    if (jobs.length === 1) { view.push(Object.assign({kind: 'j'}, jobs[0])); return }
+    jobs.sort((a, b) => ((PRI[a.state] ?? 9) - (PRI[b.state] ?? 9)) || (b.created_at - a.created_at));
+    const rep2 = Object.assign({kind: 'j'}, jobs[0]);
+    rep2._history = jobs.slice(1).map(x => Object.assign({kind: 'j'}, x));
+    jobs[0]._history = rep2._history;  // 原始条目也挂上，抽屉刷新取得到
+    view.push(rep2);
+  });
+  const order = {active: 0, pending: 1, revive: 2, done: 3};
+  view.sort((a, b) => {
+    const ba = order[taskBucket(a)], bb = order[taskBucket(b)];
+    if (ba !== bb) return ba - bb;
+    // 排队对排队：按真实执行序（queued_ahead=队列位），重排后立即生效；其余仍按时间倒序
+    const qa = a.kind === 'j' && a.state === 'queued' ? a.queued_ahead : null;
+    const qb = b.kind === 'j' && b.state === 'queued' ? b.queued_ahead : null;
+    if (qa !== null && qb !== null) return qa - qb;
+    return (b.created_at || b.created || 0) - (a.created_at || a.created || 0);
+  });
+  const shown = view.filter(r => taskFilter === 'all' || taskBucket(r) === taskFilter);
+  if (!shown.length) wrap.innerHTML = '<div class="card dim">没有任务——点上方「＋ 新建任务」开始</div>';
+  else {
+    // 卡片调和（0.1.19）：结构签名未变的卡片保留 DOM、仅原地刷新进度/摘要，
+    // 不再整列 innerHTML 重建——上传期 200ms 一帧的全量重建会把 ⋯ 菜单连同按钮
+    // 一起拆掉（菜单一闪即失/点击落在拆除节点上丢失），也白白重挂全部缩略图。
+    const want = new Set(shown.map(r => (r.kind === 'u' ? 'u:' + r.uid : 'j:' + r.id)));
+    Array.from(wrap.children).forEach(el => { if (!el.dataset.key || !want.has(el.dataset.key)) el.remove() });
+    const byKey = new Map(Array.from(wrap.children).filter(el => el.dataset.key).map(el => [el.dataset.key, el]));
+    let prevEl = null;
+    shown.forEach(r => {
+      const key = r.kind === 'u' ? 'u:' + r.uid : 'j:' + r.id;
+      let el = byKey.get(key);
+      // 菜单开着时即使结构变了也先不拆卡（原地刷新顶住），菜单关掉后下一轮自然重建
+      if (el && (el.dataset.sig === cardSig(r) || el.querySelector('.pop-menu'))) {
+        el._row = r;
+        if (!updateTaskCard(el, r)) { el.remove(); el = renderTaskCard(r) }
+      } else {
+        if (el) el.remove();   // 结构变了：旧卡必须让位，否则同键双卡并存
+        el = renderTaskCard(r);
+      }
+      // appendChild 是拆下重插：若落在按下-抬起之间，整次 click 会被浏览器取消
+      // （回传首击失效根因，2026-09-06 实证）——已在正确位置的原卡一律不动
+      if (el.parentElement !== wrap || el.previousElementSibling !== prevEl) wrap.append(el);
+      prevEl = el;
+    });
+  }
+  const act = view.filter(r => taskBucket(r) === 'active').length;
+  const pen = view.filter(r => taskBucket(r) === 'pending').length;
+  const rev = view.filter(r => taskBucket(r) === 'revive').length;
+  const readyN = uploadRows.filter(r => r.state === 'ready').length;
+  const finN = jobList.filter(j => ['done', 'failed', 'cancelled'].includes(j.state)).length;
+  const finBtn = finN ? ' &nbsp;<button class="btn sec mini" onclick="clearFinished()">清理已结束 (' + finN + ')</button>' : '';
+  const base = (act || pen || rev) ? ('进行中 ' + act + ' · 等待 ' + pen + ' · 待继续 ' + rev) : '';
+  const sumHtml = base + finBtn + (readyN >= 2
+    ? ' &nbsp;<button class="btn mini" onclick="batchProcessReady()">批量加工已入库 (' + readyN + ')</button>'
+    : '');
+  const sumEl = $('task-summary');
+  if (sumEl.dataset.h !== sumHtml) { sumEl.dataset.h = sumHtml; sumEl.innerHTML = sumHtml }
+}
+/* 结构签名：决定按钮组/菜单项/徽章/历史条的静态部分；进度/速度属动态区不进签名 */
+function cardSig(r) {
+  if (r.kind === 'u') {
+    let s = '-';
+    if (r.state === 'ready') { const sc = scanStateFor(r.name); if (sc) s = sc.state + ':' + ((sc.spans || []).length) + ':' + (sc.created_at || 0) }
+    return ['u', r.uid, r.state, s].join('|');
+  }
+  return ['j', r.id, r.state, r.resume_info ? 1 : 0, r.error_hint ? 1 : 0, (r._history || []).length].join('|');
+}
+/* 卡片动态区（进度条/摘要行）：随轮询高频变化、与结构无关的部分。
+   renderTaskCard 整卡渲染与 updateTaskCard 原地刷新共用，保证两条路径 HTML 一致。 */
+function taskDyn(r) {
+  let barInner = '', sub = '', extra = '';
+  if (r.kind === 'u') {
+    const pct = r.total ? Math.min(100, (r.received + (r.state === 'uploading' ? 0.5 : 0)) / r.total * 100) : (r.state === 'ready' ? 100 : 0);
+    if (r.state === 'uploading' || r.state === 'paused' || r.state === 'waiting') {
+      barInner = '<div class="pbar"><div style="width:' + pct + '%"></div></div>' +
+            '<span class="dim" style="min-width:150px;text-align:right">' + pct.toFixed(0) + '% · ' + (r.received || 0) + '/' + (r.total || '?') + '片' + (r.speed ? ' · ' + r.speed.toFixed(0) + 'MB/s' : '') + '</span>';
+    }
+    if (r.state === 'ready') {
+      // 暂存态摘要：扫描进度/就绪结论（检出段数与覆盖率）；网盘导入行 size=0 → 从素材缓存补
+      const sz = fmtSize(((libCache.get(r.name) || {}).size_mb) || r.size || 0);
+      const sc = scanStateFor(r.name);
+      if (!sc) sub = sz + ' · 等待 GPU 空闲后自动扫描' + (r.err ? ' · <span style="color:var(--err)">' + r.err + '</span>' : '');
+      else if (sc.state === 'queued' || sc.state === 'running') {
+        const wait = Math.max(0, Math.round(Date.now() / 1000 - (sc.created_at || 0)));
+        const ahead = lastScanList.filter(s => (s.state === 'running' || s.state === 'queued') && s.created_at < sc.created_at).length;
+        sub = sz + ' · ' + (sc.state === 'queued' ? '排队扫描' : '扫描中') + ' · 已' + (sc.state === 'queued' ? '等待 ' : '运行 ') + fmtDur(wait) + (ahead > 0 ? ' · 前面还有 ' + ahead + ' 个' : '');
+      } else if (sc.state === 'done') {
+        const n = (sc.spans || []).length;
+        if (n) {
+          const cov = Math.round((sc.spans || []).reduce((a, s) => a + (s.end - s.start), 0) / Math.max(1, sc.duration || 1) * 100);
+          sub = sz + ' · 检出 ' + n + ' 段 · 覆盖 ' + cov + '% · 时长 ' + fmtDur(sc.duration || 0);
+        } else sub = sz + ' · 未检出马赛克段（可手动画范围，或全片处理）';
+      } else sub = sz + ' · 扫描失败（可重试或全片处理）' + (r.err ? ' · <span style="color:var(--err)">' + r.err + '</span>' : '');
+    } else sub = fmtSize(r.size) + (r.err ? ' · <span style="color:var(--err)">' + r.err + '</span>' : '');
+  } else {
+    const pct = r.progress_pct || 0;
+    if (r.state === 'running' || r.state === 'queued') {
+      barInner = '<div class="pbar"><div style="width:' + pct + '%"></div></div>' +
+            '<span class="dim" style="min-width:170px;text-align:right">' + pct.toFixed(0) + '%' + (r.fps ? ' · ' + r.fps + 'fps' : '') + jobEta(r) + '</span>';
+    }
+    // 卡片只留主流程信息（进度/排队/耗时）；模型·编码·通道·日志等细节归抽屉
+    sub = [r.segments ? '段 ' + r.segments.slice(0, 24) : '',
+           new Date(r.created_at * 1000).toLocaleTimeString(),
+           r.state === 'queued' && r.queued_ahead ? '前面还有 ' + r.queued_ahead + ' 个' : '',
+           r.state === 'queued' ? queueEtaText(r) : '',
+           r.state === 'done' && r.finished_at ? '耗时 ' + fmtDur(r.finished_at - (r.started_at || r.created_at)) : ''].filter(Boolean).join(' · ');
+    if (r.state === 'failed' && r.error_hint) extra += '<div class="t-sub" style="color:var(--err)">原因：' + escH(r.error_hint) + '</div>';
+    if (r.resume_info) extra += '<div class="t-sub" style="color:var(--ok)">断点已保留：已完成 ' + r.resume_info.done + '/' + r.resume_info.total + ' 段，重试将从断点继续（已完成段不重跑）</div>';
+    if (r.state === 'paused') extra += '<div class="t-sub">已暂停（冻结）：显存仍被占用，队列不会推进；要让队列先跑别的，用 ⋯ 菜单「让位」。服务重启会转为已中断</div>';
+    if (r.state === 'interrupted') extra += '<div class="t-sub">服务重启导致中断，参数已保留，可直接重试</div>';
+  }
+  return {barInner, sub, extra};
+}
+/* 结构未变卡片的原地刷新：只重写进度条与摘要行（比对后才写，避免无谓布局抖动）。
+   返回 false = 动态区结构对不上（不应发生），调用方整卡重建兜底。 */
+function updateTaskCard(el, r) {
+  const d = taskDyn(r);
+  let bar = el.querySelector('.t-bar');
+  if (d.barInner && !bar) {
+    const actsEl = el.querySelector('.t-acts');
+    if (!actsEl) return false;
+    actsEl.insertAdjacentHTML('beforebegin', '<div class="t-bar">' + d.barInner + '</div>');
+    bar = el.querySelector('.t-bar');
+    if (!bar) return false;
+  }
+  if (bar) {
+    if (d.barInner) { if (bar.dataset.h !== d.barInner) { bar.dataset.h = d.barInner; bar.innerHTML = d.barInner } }
+    else bar.remove();
+  }
+  const sub = el.querySelector('.t-sub');
+  if (sub && sub.dataset.h !== d.sub) { sub.dataset.h = d.sub; sub.innerHTML = d.sub }
+  el._row = r;
+  return true;
+}
+function badgeHtml(r) {
+  const names = {uploading:'上传中', waiting:'等待', paused:'已暂停', ready:'已入库', failed:'失败',
+                 queued:'排队中', running:'处理中', done:'完成', cancelled:'已取消', cancelling:'取消中', interrupted:'已中断'};
+  if (r.kind === 'u' && r.state === 'ready') {
+    const sc = scanStateFor(r.name);
+    if (!sc) return '<span class="badge staged">待扫描</span>';
+    if (sc.state === 'queued' || sc.state === 'running') return '<span class="badge staged">扫描中</span>';
+    if (sc.state === 'done') return (sc.spans || []).length
+      ? '<span class="badge staged">已就绪</span>' : '<span class="badge nodetect">未检出</span>';
+    return '<span class="badge nodetect">扫描失败</span>';
+  }
+  return '<span class="badge ' + r.state + '">' + (names[r.state] || r.state) + '</span>';
+}
+/* 同源历史行：卡片内联展开与抽屉共用同一渲染（全局一致性） */
+function histRowHtml(h) {
+  const out = h.output.split('/').pop();
+  const safeOut = out.replace(/['\\]/g, '');
+  const safeIn = (h.input || '').replace(/['\\]/g, '');
+  let acts = '';
+  if (h.state === 'done') acts = '<button class="btn sec mini" onclick="event.stopPropagation();previewOutput(\'' + safeOut + '\',\'' + safeIn + '\')">对比</button>' +
+    '<a class="btn sec mini" style="text-decoration:none" onclick="event.stopPropagation()" href="' + UP('/outputs/' + encodeURI(out)) + '?dl=1">回传</a>';
+  else if (h.state === 'failed' || h.state === 'interrupted' || h.state === 'cancelled') acts = '<button class="btn mini" onclick="event.stopPropagation();drawerRetryHist(\'' + h.id + '\')"' + (srcGone(h) ? ' disabled title="源视频已删除，无法重新处理"' : '') + '>' + (h.resume_info ? '从断点继续' : '重试') + '</button>' +
+    '<button class="btn danger mini" onclick="event.stopPropagation();delJobRecord(\'' + h.id + '\')">删除</button>';
+  return '<div class="row hist-row" onclick="event.stopPropagation()">' +
+    '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + badgeHtml(h) + ' <span class="dim">' + escH(out) + ' · ' + new Date(h.created_at * 1000).toLocaleString() + '</span></span>' +
+    '<span class="actions">' + acts +
+    '<button class="btn sec mini" onclick="event.stopPropagation();drawerToJob(\'' + h.id + '\')">详情</button>' +
+    '</span></div>';
+}
+/* 卡片操作分层：主操作≤2 直接露出（首个主色），其余收进 ⋯ 溢出菜单（v0.14.3） */
+function cardPrimary(r) {
+  if (r.kind === 'u') {
+    if (r.state === 'uploading') return [['pause', '暂停']];
+    if (r.state === 'paused' || r.state === 'failed') return [['resume', '继续']];
+    if (r.state === 'ready') {
+      // 暂存态操作随扫描状态推进：就绪=发起处理(带检出段)；未检出=先画范围；扫描中=无操作；未扫=开始扫描
+      const sc = scanStateFor(r.name);
+      if (sc && sc.state === 'done') return (sc.spans || []).length ? [['make2', '发起处理']] : [['segedit2', '调整范围']];
+      if (sc && (sc.state === 'queued' || sc.state === 'running')) return [];
+      return [['scan-now', '开始扫描']];
+    }
+    return [];
+  }
+  if (r.state === 'running') return [['jpause', '暂停']];
+  if (r.state === 'paused') return [['jresume', '继续']];
+  if (r.state === 'queued') return [['jtop', '置顶']];
+  if (r.state === 'failed' || r.state === 'interrupted' || r.state === 'cancelled')
+    return [['jretry', r.resume_info ? '从断点继续' : '重试', '', srcGone(r) ? '源视频已删除，无法重新处理' : '']];
+  if (r.state === 'done') return [['pv', '对比预览'], ['dl', '回传']];
+  return [];
+}
+function cardMenuItems(r) {
+  if (r.kind === 'u') {
+    if (r.state === 'uploading' || r.state === 'waiting' || r.state === 'paused' || r.state === 'failed') return [['ucancel', '取消上传', 'danger']];
+    if (r.state === 'ready') {
+      const sc = scanStateFor(r.name);
+      const items = [];
+      if (sc && sc.state === 'done') {
+        if ((sc.spans || []).length) items.push(['segedit2', '调整范围'], ['full', '全片处理']);
+        else items.push(['full', '全片处理']);
+        items.push(['rescan', '重新扫描']);
+      } else if (sc && (sc.state === 'queued' || sc.state === 'running')) {
+        items.push(['full', '跳过扫描，直接全片']);
+      } else items.push(['full', '全片处理（跳过扫描）']);
+      items.push(['dismiss', '清除记录', 'danger']);
+      return items;
+    }
+    return [];
+  }
+  const items = [];
+  if (r.state === 'done') items.push(['drive', '保存到懒猫网盘'], ['jretry', '重新处理', '', srcGone(r) ? '源视频已删除，无法重新处理' : '']);
+  items.push(['log', '日志'], ['segedit', '段编辑']);
+  if (r.state === 'running' || r.state === 'queued' || r.state === 'cancelling') {
+    items.push(['jyield', r.state === 'running' ? '让位（断点保留·队列推进）' : '取消任务', 'danger']);
+  }
+  if (r.state === 'paused') items.push(['jyield', '让位（断点保留·释放资源）', 'danger']);
+  if (r.state === 'queued') items.push(['jup', '上移'], ['jdown', '下移'], ['jbottom', '移到最后']);
+  if (r.state === 'failed' || r.state === 'interrupted' || r.state === 'cancelled') items.push(['jdel', '删除记录', 'danger']);
+  return items;
+}
+function closeCardMenus() { document.querySelectorAll('.pop-menu').forEach(m => m.remove()) }
+function toggleCardMenu(ev, r, btn) {
+  ev.stopPropagation();
+  const wrap = btn.parentElement;
+  const existing = wrap.querySelector('.pop-menu');
+  closeCardMenus();
+  if (existing) return;
+  const menu = document.createElement('div');
+  menu.className = 'pop-menu';
+  cardMenuItems(r).forEach(it => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    if (it[2] === 'danger') b.className = 'pm-danger';
+    b.textContent = it[1];
+    if (it[3]) { b.disabled = true; b.title = it[3] }
+    b.onclick = (ev2) => { ev2.stopPropagation(); closeCardMenus(); taskAction(r, it[0], btn) };
+    menu.append(b);
+  });
+  wrap.append(menu);
+}
+document.addEventListener('click', closeCardMenus);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCardMenus() });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && segOverlayOpen() && !$('modal').classList.contains('show')) closeSegOverlay() });
+function renderTaskCard(r) {
+  const card = document.createElement('div');
+  card.className = 'task'; card.dataset.uid = r.kind === 'u' ? r.uid : r.id;
+  card.dataset.key = r.kind === 'u' ? 'u:' + r.uid : 'j:' + r.id;
+  card.dataset.sig = cardSig(r);
+  card._row = r;   // 原地刷新（updateTaskCard）会持续更新：按钮回调从元素取最新行对象，不吃旧闭包快照
+  const isU = r.kind === 'u';
+  const name = isU ? r.name : (r.input.split('/').pop() + ' → ' + r.output.split('/').pop());
+  const dyn = taskDyn(r);
+  const bar = dyn.barInner ? '<div class="t-bar">' + dyn.barInner + '</div>' : '';
+  let acts = '';
+  // 操作分层：主操作≤2 直接露出（首个主色），其余收进 ⋯ 溢出菜单
+  const parts = [];
+  cardPrimary(r).forEach((p, i) => {
+    if (p[0] === 'dl') parts.push('<a class="btn sec mini" style="text-decoration:none" onclick="event.stopPropagation()" href="' + UP('/outputs/' + encodeURI(r.output.split('/').pop())) + '?dl=1">回传</a>');
+    else parts.push('<button class="btn ' + (i === 0 ? '' : 'sec') + ' mini" data-act="' + p[0] + '"' + (p[3] ? ' disabled title="' + p[3] + '"' : '') + '>' + p[1] + '</button>');
+  });
+  if (cardMenuItems(r).length) parts.push('<span class="menu-wrap"><button class="btn sec mini" data-act="more" title="更多操作">⋯</button></span>');
+  acts = parts.length ? '<div class="t-acts">' + parts.join('') + '</div>' : '';
+  // 缩略图源：加工行用同源 /media 抽帧（HTTP Range，浏览器按需读，内存有界）。
+  // 上传行不再用本地 blob 抽帧：<video> 解码多 GB 文件会拖爆渲染进程
+  // （Chrome「错误代码：Out of Memory」崩溃，2026-09-05）——统一占位符，
+  // 入库后由加工行/素材库的服务端通道接管缩略图。
+  let tsrc = '';
+  if (!isU) tsrc = WEB + '/media/' + encodeURIComponent(r.input.split('/').pop());
+  const hist = r._history || [];
+  card.innerHTML = '<div class="t-main">' +
+    (tsrc ? thumbHtml(tsrc) : '<div class="thumb"><span class="thumb-ph">' + (isU ? '⬆' : '◆') + '</span></div>') +
+    '<div class="t-body">' +
+      '<div class="t-head"><div class="t-name">' + name + '</div>' + badgeHtml(r) +
+      (hist.length ? '<span class="hist-chip" data-act="hist">历史 ' + hist.length + ' ▾</span>' : '') + '</div>' +
+      '<div class="t-sub">' + dyn.sub + '</div>' + dyn.extra + bar + acts +
+    '</div></div>' +
+    (hist.length ? '<div class="t-hist" style="display:none">' + hist.map(histRowHtml).join('') + '</div>' : '');
+  // 动态区哈希种子：与 updateTaskCard 的比对写配合，新卡首次刷新不做无谓重写
+  const _bar0 = card.querySelector('.t-bar'); if (_bar0) _bar0.dataset.h = dyn.barInner;
+  const _sub0 = card.querySelector('.t-sub'); if (_sub0) _sub0.dataset.h = dyn.sub;
+  card.querySelectorAll('[data-act]').forEach(b => b.onclick = (ev) => {
+    ev.stopPropagation();
+    const cur = card._row;   // 卡片被调和复用时读最新行对象，菜单项/操作不吃旧状态
+    if (b.dataset.act === 'more') toggleCardMenu(ev, cur, b);
+    else taskAction(cur, b.dataset.act, b);
+  });
+  card.onclick = () => openDrawer(card._row);
+  hydrateThumbs(card);
+  return card;
+}
+async function taskAction(r, act, btn) {
+  if (act === 'pause') pauseUpload(r.uid);
+  else if (act === 'resume') resumeUpload(r.uid);
+  else if (act === 'ucancel') cancelUpload(r.uid);
+  else if (act === 'dismiss') dismissUpload(r.uid);
+  else if (act === 'make') openModal({path: '/videos/' + r.name, name: r.name});
+  else if (act === 'make2') {   // 就绪发起处理：范围预填检出段（逐段修复）
+    const sc = scanStateFor(r.name);
+    openModal({path: '/videos/' + r.name, name: r.name});
+    if (sc) setSegPick(spansStrFor(sc));
+    $('m-seg-suggest').textContent = '';
+  }
+  else if (act === 'segedit2') openSegTab('/videos/' + r.name);
+  else if (act === 'full') openModal({path: '/videos/' + r.name, name: r.name});
+  else if (act === 'scan-now' || act === 'rescan') { fireScanFor(r.name); setTimeout(pollScans, 400) }
+  else if (act === 'hist') {
+    const h = btn && btn.closest('.task') && btn.closest('.task').querySelector('.t-hist');
+    if (h) {
+      const show = h.style.display === 'none';
+      h.style.display = show ? '' : 'none';
+      if (btn) btn.textContent = '历史 ' + (r._history || []).length + (show ? ' ▴' : ' ▾');
+    }
+    return;
+  }
+  else if (act === 'jpause' || act === 'jresume') { await fetch(`${WEB}/jobs/${r.id}/` + act.slice(1), {method:'POST'}); pollJobs() }
+  else if (act === 'segedit') openSegPickerJob(r.id);
+  else if (act === 'pv') previewOutput(r.output.split('/').pop(), r.input);
+  else if (act === 'jtop' || act === 'jup' || act === 'jdown' || act === 'jbottom') {
+    await fetch(`${WEB}/jobs/reorder`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: r.id, to: act.slice(1)})}); pollJobs() }
+  else if (act === 'jyield') {
+    if (!confirm('让位 = 停止本任务，队列自动开始下一个。\n已完成的片段会保留——稍后「重试」将从断点继续，无需重头跑。')) return;
+    await fetch(`${WEB}/jobs/${r.id}/cancel`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode:'yield'})}); pollJobs()
+  }
+  else if (act === 'jcancel') { await fetch(`${WEB}/jobs/${r.id}/cancel`, {method:'POST'}); pollJobs() }
+  else if (act === 'jdel') { await delJobRecord(r.id) }
+  else if (act === 'jretry') {
+    const d2 = await (await fetch(`${WEB}/jobs/${r.id}/retry`, {method:'POST'})).json();
+    if (d2.error) alert(d2.error); pollJobs();
+  }
+  else if (act === 'log') openDrawer(r);
+  else if (act === 'drive') driveSave(r.output.split('/').pop());
+}
+async function pollJobs() {
+  try {
+    const d = await (await fetch(WEB + '/jobs')).json();
+    jobList = d.jobs || [];
+    const st = $('state');   // 连通指示器接线（2026-09-06）：此前无任何代码更新 #state，永远停在"连接中…"
+    if (st) { st.textContent = '在线 · ' + new Date().toLocaleTimeString(); st.className = 'on' }
+  } catch (e) {
+    const st = $('state');
+    if (st) { st.textContent = '后端不可达，重试中…'; st.className = '' }
+  }
+  checkJobEvents(jobList);
+  renderTasks();   // 无论后端可达与否都用缓存+本地上传行重渲染，列表不空转
+}
+
+/* ===== 完成提醒（v0.12.12）：标题闪烁 + 可开关的系统通知/提示音 ===== */
+function remindOn() { return localStorage.getItem('jasna_remind') !== 'off' }   // 默认开
+function renderRemind() {
+  const b = $('remind-btn');
+  if (b) { b.textContent = remindOn() ? '🔔' : '🔕'; b.style.opacity = remindOn() ? '' : '.5' }
+}
+function toggleRemind() {
+  if (remindOn()) { localStorage.setItem('jasna_remind', 'off') }
+  else {
+    localStorage.setItem('jasna_remind', 'on');
+    try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission() } catch (e) {}
+  }
+  renderRemind();
+}
+let titleTimer = null;
+function flashTitle(msg) {
+  if (titleTimer) return;
+  let on = false, n = 0;
+  titleTimer = setInterval(() => {
+    document.title = (on = !on) ? msg : 'Jasna 工作台';
+    if (++n > 24) { clearInterval(titleTimer); titleTimer = null; document.title = 'Jasna 工作台' }
+  }, 800);
+}
+function pingDone() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+    [[660, 0], [880, 0.18]].forEach(p => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.connect(g); g.connect(ac.destination); o.frequency.value = p[0];
+      const t0 = ac.currentTime + p[1];
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+      o.start(t0); o.stop(t0 + 0.55);
+    });
+    setTimeout(() => ac.close(), 1500);
+  } catch (e) {}
+}
+const prevJobStates = {};   // 首轮不提醒：页面刚打开时对既有 done 静默
+function checkJobEvents(jobs) {
+  jobs.forEach(j => {
+    const prev = prevJobStates[j.id];
+    if (prev && prev !== 'done' && j.state === 'done') {
+      const name = (j.output || '').split('/').pop();
+      flashTitle('✅ ' + name + ' 已完成');
+      if (remindOn()) {
+        pingDone();
+        try { if (window.Notification && Notification.permission === 'granted')
+          new Notification('Jasna 任务完成', {body: name + (j.output_size_mb ? '（' + fmtSize(j.output_size_mb) + '）' : '') + ' 已就绪', tag: 'jasna-' + j.id}) } catch (e) {}
+      }
+    }
+    prevJobStates[j.id] = j.state;
+  });
+}
+
+/* ===== 全页拖拽上传（v0.12.12）：拖视频进窗口任意位置即入队上传 ===== */
+let dragDepth = 0;
+function dragHasFiles(e) { return !!(e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) }
+window.addEventListener('dragenter', e => { if (dragHasFiles(e)) { dragDepth++; $('dropzone').classList.add('show') } });
+window.addEventListener('dragleave', () => { if (dragDepth > 0 && --dragDepth === 0) $('dropzone').classList.remove('show') });
+window.addEventListener('dragover', e => { if (dragHasFiles(e)) e.preventDefault() });
+window.addEventListener('drop', e => {
+  if (!dragHasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('dropzone').classList.remove('show');
+  // items 必须同步取（事件返回后 DataTransfer 失效）；句柄异步解析
+  const picks = Array.from(e.dataTransfer.items || []).filter(it => it.kind === 'file').map(it => {
+    let hp = null;
+    try { hp = it.getAsFileSystemHandle ? it.getAsFileSystemHandle() : null } catch (err) {}
+    const f = it.getAsFile();
+    return Promise.resolve(hp).then(h => {
+      if (h && h.kind && h.kind !== 'file') h = null;
+      return h ? h.getFile().then(ff => [ff, h]) : [f, null];
+    });
+  });
+  Promise.all(picks).then(pairs => {
+    const ok = pairs.filter(p => p[0] && (p[0].type.startsWith('video/') || /\.(mp4|mkv|mov|avi|ts|wmv|flv|webm|m4v)$/i.test(p[0].name)));
+    if (ok.length) { startUploads(ok.map(p => p[0]), ok.map(p => p[1])); tab('tasks') }
+  });
+});
+// 轮询退避（治盒子 GIN 日志噪音）：有活动任务/扫描时 3s/2.5s 保实时，空闲时 15s/20s
+function busyWork() {
+  return (jobList || []).some(j => ['running', 'queued', 'uploading', 'paused'].includes(j.state)) ||
+         (lastScanList || []).some(s => ['running', 'queued'].includes(s.state));
+}
+setInterval(() => { if (busyWork()) pollJobs() }, 3000);
+setInterval(() => { if (busyWork()) pollScans() }, 2500);
+setInterval(() => { if (!busyWork()) pollJobs() }, 15000);
+setInterval(() => { if (!busyWork()) pollScans() }, 20000);
+window.addEventListener('error', e => { window.__lastErr = e.message });
+async function clearFinished() {
+  // 后端只删 done/failed/cancelled 的任务记录（interrupted 保留待重试），不动 /outputs 成品文件
+  if (!confirm('清理全部已结束的任务记录（完成/失败/取消）？\n成品文件不受影响；已中断的任务会保留。')) return;
+  await fetch(WEB + '/jobs/clear-finished', {method:'POST'}); pollJobs()
+}
+async function delJobRecord(id) {
+  if (!confirm('删除该任务记录？不影响已生成的成品文件。')) return;
+  const resp = await fetch(WEB + '/jobs/' + id, {method:'DELETE'});
+  if (!resp.ok) { const d = await resp.json().catch(() => ({})); alert(d.error || ('删除失败 HTTP ' + resp.status)) }
+  pollJobs();
+}
+
+/* ===== 详情抽屉 ===== */
+let drawerRef = null, drawerTimer = null;
+function openDrawer(r) {
+  drawerRef = r.kind === 'u' ? {kind:'u', uid:r.uid} : {kind:'j', id:r.id};
+  $('drawer').classList.add('open'); $('drawer-bg').classList.add('show');
+  renderDrawer();
+  clearInterval(drawerTimer);
+  if ((r.kind === 'u' && (r.state === 'uploading' || r.state === 'waiting')) || (r.kind === 'j' && (r.state === 'running' || r.state === 'queued' || r.state === 'cancelling')))
+    drawerTimer = setInterval(renderDrawer, 2000);
+}
+function closeDrawer() { $('drawer').classList.remove('open'); $('drawer-bg').classList.remove('show'); clearInterval(drawerTimer); drawerRef = null }
+/* 成品预览：滑块对比 / 并排 / 单画面（Topaz 式验收；input 为原始视频路径，缺省时退单画面） */
+let pvOpen = false, pvMode = 'slider';
+function previewOutput(name, input) {
+  $('pv-out-title').textContent = name;
+  const after = $('cmp-after'), before = $('cmp-before');
+  after.src = UP('/outputs/' + encodeURIComponent(name));
+  if (input) before.src = WEB + '/media/' + encodeURIComponent(input.split('/').pop());
+  else before.removeAttribute('src');
+  pvOpen = true;
+  $('pvmodal').classList.add('show');
+  $('pv-mode-seg').style.display = input ? '' : 'none';
+  $('pv-note').textContent = input ? '拖动分割线对比 · 左原始（静音）/ 右成品' : '成品播放（未找到对应原片，单画面）';
+  setPvMode(input ? 'slider' : 'solo');
+  cmpSetSplit(50);
+  cmpFixInner();
+  after.play().catch(() => {});
+}
+function setPvMode(m) {
+  pvMode = m;
+  $('cmp-wrap').className = 'cmp-wrap ' + m;
+  document.querySelectorAll('#pv-mode-seg button').forEach(b => b.classList.toggle('on', b.dataset.pv === m));
+  if (m === 'slider') cmpFixInner(); else $('cmp-before').style.width = '';
+}
+function cmpSetSplit(pct) {
+  pct = Math.max(2, Math.min(98, pct));
+  $('cmp-clip').style.width = pct + '%';
+  $('cmp-handle').style.left = pct + '%';
+}
+function cmpFixInner() {   // 滑块模式下裁剪容器内的原始视频需锁定全宽，否则随裁剪变形
+  const w = $('cmp-wrap').clientWidth;
+  if (w) $('cmp-before').style.width = w + 'px';
+}
+function cmpToggle() {
+  const a = $('cmp-after');
+  if (a.paused) a.play().catch(() => {}); else a.pause();
+}
+function closePreview() {
+  pvOpen = false;
+  ['cmp-before', 'cmp-after'].forEach(id => { const v = $(id); try { v.pause(); } catch (e) {} v.removeAttribute('src'); v.load() });
+  $('pvmodal').classList.remove('show');
+}
+(() => {   // 对比播放器静态监听（成品为主时钟，原始跟随且静音）
+  const after = $('cmp-after'), before = $('cmp-before');
+  if (!after) return;
+  after.addEventListener('loadedmetadata', () => { if (isFinite(after.duration)) $('cmp-seek').max = 100 });
+  after.addEventListener('timeupdate', () => {
+    if (before.src && Math.abs(before.currentTime - after.currentTime) > 0.2) { try { before.currentTime = after.currentTime } catch (e) {} }
+    if (isFinite(after.duration) && after.duration) {
+      $('cmp-seek').value = after.currentTime / after.duration * 100;
+      $('cmp-time').textContent = fmtDur(after.currentTime) + ' / ' + fmtDur(after.duration);
+    }
+  });
+  after.addEventListener('play', () => { $('cmp-play').textContent = '⏸ 暂停'; if (before.src) before.play().catch(() => {}) });
+  after.addEventListener('pause', () => { $('cmp-play').textContent = '▶ 播放'; try { before.pause() } catch (e) {} });
+  $('cmp-seek').addEventListener('input', () => { if (isFinite(after.duration) && after.duration) after.currentTime = $('cmp-seek').value / 100 * after.duration });
+  let drag = false;
+  $('cmp-handle').addEventListener('pointerdown', e => { drag = true; e.preventDefault() });
+  window.addEventListener('pointermove', e => {
+    if (!drag || !pvOpen || pvMode !== 'slider') return;
+    const r = $('cmp-wrap').getBoundingClientRect();
+    cmpSetSplit((e.clientX - r.left) / r.width * 100);
+  });
+  window.addEventListener('pointerup', () => drag = false);
+  window.addEventListener('resize', () => { if (pvOpen && pvMode === 'slider') cmpFixInner() });
+})();
+function drawerToJob(id) { drawerRef = {kind: 'j', id}; renderDrawer(); }
+function drawerRetryHist(id) {
+  const j = jobList.find(x => x.id === id);
+  if (!j) return;
+  taskAction(j, 'jretry');
+  setTimeout(renderDrawer, 800);
+}
+function refreshDrawerCurrent() {
+  if (!drawerRef) return null;
+  return drawerRef.kind === 'u' ? uploadRowByUid(drawerRef.uid) : jobList.find(j => j.id === drawerRef.id);
+}
+function drawerAct(act) {
+  const r = refreshDrawerCurrent();
+  if (!r) return;
+  taskAction(r, act);
+  setTimeout(renderDrawer, 400);
+}
+function renderDrawer() {
+  const r = refreshDrawerCurrent();
+  if (!r) { closeDrawer(); return }
+  // 原始上传行没有 kind 字段（视图副本才有）：加工任务必有 id，上传任务必有 uid
+  const isU = r.kind === 'u' || (!r.id && !!r.uid);
+  $('d-title').textContent = isU ? r.name : (r.input.split('/').pop() + ' → ' + r.output.split('/').pop());
+  // 抽屉每 2s 重刷：内容没变就不重写 innerHTML，避免吞掉落在重建瞬间的按钮点击
+  const subHtml = badgeHtml(r);
+  if ($('d-sub').dataset.h !== subHtml) { $('d-sub').dataset.h = subHtml; $('d-sub').innerHTML = subHtml }
+  const prog = $('d-progress');
+  if (isU) {
+    const pct = r.total ? Math.min(100, (r.received + (r.state === 'uploading' ? 0.5 : 0)) / r.total * 100) : (r.state === 'ready' ? 100 : 0);
+    prog.style.display = (r.state !== 'failed' && r.state !== 'cancelled') ? '' : 'none';
+    $('d-pbar').style.width = pct + '%';
+    $('d-ptext').textContent = pct.toFixed(1) + '% · ' + (r.received || 0) + '/' + (r.total || '?') + ' 片' + (r.speed ? ' · ' + r.speed.toFixed(0) + 'MB/s' : '');
+    const kvHtml = '<div class="k">大小</div><div>' + fmtSize(r.size) + '</div>' +
+      '<div class="k">通道</div><div>' + (r.channel === 'domain' ? '域名通道（经盒子反代）' : '局域网直连') + '</div>' +
+      '<div class="k">会话</div><div style="overflow-wrap:anywhere">' + r.uid + '</div>' +
+      (r.err ? '<div class="k">备注</div><div style="color:var(--err)">' + r.err + '</div>' : '');
+    if ($('d-kv').dataset.h !== kvHtml) { $('d-kv').dataset.h = kvHtml; $('d-kv').innerHTML = kvHtml }
+    $('d-log-sect').style.display = 'none';
+    $('d-hist-sect').style.display = 'none';
+    const a = [];
+    if (r.state === 'uploading') a.push('<button class="btn sec mini" onclick="pauseUpload(\'' + r.uid + '\');renderDrawer()">暂停</button>');
+    if (r.state === 'paused' || r.state === 'failed') a.push('<button class="btn mini" onclick="resumeUpload(\'' + r.uid + '\');renderDrawer()">继续</button>');
+    if (r.state === 'failed' && r.base !== WEB) a.push('<button class="btn mini" onclick="retryUploadOther(\'' + r.uid + '\');renderDrawer()">换域名重试</button>');
+    if (r.state === 'failed' && r.base === WEB) a.push('<button class="btn mini" onclick="retryUploadOther(\'' + r.uid + '\');renderDrawer()">换直连重试</button>');
+    if (r.state !== 'ready') a.push('<button class="btn danger mini" onclick="cancelUpload(\'' + r.uid + '\');closeDrawer()">取消上传</button>');
+    if (r.state === 'ready') {
+      const sc = scanStateFor(r.name);
+      if (sc && sc.state === 'done' && (sc.spans || []).length) a.push(
+        '<button class="btn mini" onclick="drawerAct(\'make2\');closeDrawer()">发起处理</button>',
+        '<button class="btn sec mini" onclick="drawerAct(\'segedit2\')">调整范围</button>');
+      else if (sc && sc.state === 'done') a.push('<button class="btn mini" onclick="drawerAct(\'segedit2\')">调整范围</button>');
+      if (!sc || sc.state !== 'running') a.push('<button class="btn sec mini" onclick="drawerAct(\'full\');closeDrawer()">全片处理</button>');
+      if (!sc || sc.state !== 'running') a.push('<button class="btn sec mini" onclick="drawerAct(\'scan-now\')">扫描 / 重扫</button>');
+    }
+    a.push('<button class="btn sec mini" onclick="dismissUpload(\'' + r.uid + '\');closeDrawer()">从列表移除</button>');
+    const actHtml = a.join('');
+    if ($('d-actions').dataset.h !== actHtml) { $('d-actions').dataset.h = actHtml; $('d-actions').innerHTML = actHtml }
+  } else {
+    const pct = r.progress_pct || 0;
+    prog.style.display = (r.state === 'running' || r.state === 'queued') ? '' : 'none';
+    $('d-pbar').style.width = pct + '%';
+    $('d-ptext').textContent = pct.toFixed(1) + '%' + (r.fps ? ' · ' + r.fps + ' fps' : '') + jobEta(r);
+    const kvHtml2 = '<div class="k">源</div><div style="overflow-wrap:anywhere">' + r.input + '</div>' +
+      '<div class="k">输出</div><div style="overflow-wrap:anywhere">' + r.output + (r.output_size_mb ? '（' + r.output_size_mb + ' MB）' : '') + '</div>' +
+      '<div class="k">参数</div><div>' + [r.detection_model, r.codec.toUpperCase(), r.segments ? '段 ' + r.segments : '', new Date(r.created_at * 1000).toLocaleString()].filter(Boolean).join(' · ') + '</div>' +
+      '<div class="k">范围</div><div>' + (r.segments ? describeSegs(r.segments) : '全片处理') + '</div>' +
+      (r.state === 'done' && r.finished_at ? '<div class="k">总耗时</div><div>' + fmtDur(r.finished_at - (r.started_at || r.created_at)) + (r.started_at && r.started_at > r.created_at + 5 ? '（排队等待 ' + fmtDur(r.started_at - r.created_at) + ' 不计）' : '') + '</div>' : '') +
+      (r.state === 'failed' && r.error_hint ? '<div class="k">原因</div><div style="color:var(--err)">' + escH(r.error_hint) + '</div>' : '') +
+      (r.state === 'paused' ? '<div class="k">备注</div><div>显存仍被本任务占用；服务重启会转为已中断</div>' : '') +
+      (r.state === 'interrupted' ? '<div class="k">备注</div><div>服务重启导致中断，参数已保留，可直接重试</div>' : '') +
+      (r.state === 'done' ? '<div class="k">完成于</div><div>' + new Date((r.finished_at || 0) * 1000).toLocaleString() + '</div>' : '');
+    if ($('d-kv').dataset.h !== kvHtml2) { $('d-kv').dataset.h = kvHtml2; $('d-kv').innerHTML = kvHtml2 }
+    $('d-log-sect').style.display = '';
+    loadDrawerLog(r);
+    const a = [];
+    if (r.state === 'running') a.push('<button class="btn sec mini" onclick="drawerAct(\'jpause\')">暂停</button>');
+    if (r.state === 'paused') a.push('<button class="btn mini" onclick="drawerAct(\'jresume\')">继续</button>');
+    if (r.state === 'running' || r.state === 'queued' || r.state === 'cancelling') a.push('<button class="btn danger mini" onclick="drawerAct(\'jyield\')">' + (r.state === 'running' ? '让位' : '取消') + '</button>');
+    if (r.state === 'paused') a.push('<button class="btn danger mini" onclick="drawerAct(\'jyield\')">让位（释放资源）</button>');
+    if (r.state === 'queued') a.push('<button class="btn sec mini" onclick="drawerAct(\'jup\')">↑</button>', '<button class="btn sec mini" onclick="drawerAct(\'jdown\')">↓</button>');
+    if (r.state === 'failed' || r.state === 'cancelled' || r.state === 'done' || r.state === 'interrupted') a.push('<button class="btn mini" onclick="drawerAct(\'jretry\')"' + (srcGone(r) ? ' disabled title="源视频已删除，无法重新处理"' : '') + '>' + (r.state === 'done' ? '重新处理' : '重试') + '</button>');
+    if (r.state === 'failed' || r.state === 'cancelled' || r.state === 'interrupted') a.push('<button class="btn danger mini" onclick="drawerAct(\'jdel\')">删除记录</button>');
+    if (r.state === 'done') a.push('<button class="btn sec mini" onclick="previewOutput(\'' + r.output.split('/').pop().replace(/['\\]/g, '') + '\',\'' + (r.input || '').replace(/['\\]/g, '') + '\')">对比预览</button>');
+    if (r.state === 'done') a.push('<a class="btn sec mini" style="text-decoration:none" href="' + UP('/outputs/' + r.output.split('/').pop()) + '?dl=1">回传</a>',
+                                   '<button class="btn sec mini" onclick="driveSave(\'' + r.output.split('/').pop() + '\')">保存到懒猫网盘</button>');
+    const actHtml2 = a.join('');
+    if ($('d-actions').dataset.h !== actHtml2) { $('d-actions').dataset.h = actHtml2; $('d-actions').innerHTML = actHtml2 }
+    const hist = r._history || [];
+    $('d-hist-sect').style.display = hist.length ? '' : 'none';
+    $('d-hist-n').textContent = hist.length ? '(' + hist.length + ' 条)' : '';
+    const histHtml = hist.map(histRowHtml).join('');
+    if ($('d-hist').dataset.h !== histHtml) { $('d-hist').dataset.h = histHtml; $('d-hist').innerHTML = histHtml }
+  }
+}
+async function loadDrawerLog(j) {
+  try {
+    const d = await (await fetch(`${WEB}/jobs/${j.id}/log`)).json();
+    const pre = $('d-log');
+    pre.textContent = (d.log || []).join('\n') || '（暂无输出）';
+    if ($('d-follow').checked) pre.scrollTop = pre.scrollHeight;
+  } catch { $('d-log').textContent = '日志获取失败' }
+}
+function drawerExportLog() {
+  const blob = new Blob([$('d-log').textContent], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'jasna-job.log'; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ===== 加工参数弹窗（单个/批量共用） ===== */
+let batchList = null;
+function resetModalFields() {
+  $('m-container').value = 'mp4'; $('m-quality').value = ''; $('m-denoise').value = 'none';
+  $('m-denoisestep').value = 'after_primary'; $('m-enc').value = ''; $('m-vr').value = 'auto';
+  $('m-clip').value = 90; $('m-gap').value = ''; $('m-mindur').value = '';
+  $('m-batch').value = 4; $('m-overlap').value = 8;
+  $('m-sharpen').value = 0; $('m-sharpen-val').textContent = '关';
+  $('m-encset').value = ''; $('m-retarget').checked = false; $('m-fmp4').checked = false;
+  $('m-pea').value = ''; $('m-pec').value = ''; $('m-pec').parentElement.style.display = 'none';
+  $('m-scene').checked = true; $('m-crossfade').checked = true; $('m-fp16').checked = true; $('m-compile').checked = true;
+  $('m-pattern').value = ''; $('m-seg-field').style.display = 'none'; $('m-seg').value = ''; $('m-seg-summary').value = ''; $('m-seg-clear').style.display = 'none';
+  $('m-fmp4').disabled = false;
+  const sel = $('m-det'); sel.innerHTML = '';
+  const dets = models ? Object.entries(models.detection).filter(([,ok]) => ok) : [['rfdetr-v6-large', true]];
+  fillDetSelect(sel, dets);
+  detThresholdHint();
+}
+function openModal(v) {
+  batchList = null;
+  $('m-title').textContent = '新建加工任务';
+  $('m-input-label').textContent = '输入';
+  $('m-input').value = v.path;
+  $('m-out-field').style.display = '';
+  $('m-pattern-field').style.display = 'none';
+  resetModalFields();
+  applyLastCfg();
+  expertApply();
+  $('m-output').value = v.name.replace(/\.[^.]+$/, '') + '-restored.mp4';
+  $('m-seg-pick-field').style.display = '';
+  $('m-seg-suggest').textContent = '';
+  if (!$('m-seg').value) segSuggest(v.path);
+  $('modal').classList.add('show');
+}
+function batchProcessReady() {
+  const rows = uploadRows.filter(r => r.state === 'ready');
+  if (rows.length < 2) { alert('已入库的可批量文件不足 2 个'); return }
+  openModalBatch(rows.map(r => ({path: '/videos/' + r.name, name: r.name})));
+}
+function openModalBatch(list) {
+  batchList = list;
+  $('m-title').textContent = '批量加工（' + list.length + ' 个素材）';
+  $('m-batch-note').style.display = list.length > 1 ? '' : 'none';
+  $('m-batch-note').textContent = list.length > 1 ? '以下参数将应用于本批全部文件（批量按全片处理；按时段修复请对单个视频发起）' : '';
+  $('m-input-label').textContent = '输入（批量）';
+  $('m-input').value = list.map(v => v.name).join('、');
+  $('m-out-field').style.display = 'none';
+  $('m-pattern-field').style.display = '';
+  $('m-seg-pick-field').style.display = 'none'; $('m-seg-field').style.display = 'none';
+  resetModalFields();
+  applyLastCfg();
+  expertApply();
+  if (!$('m-pattern').value) $('m-pattern').value = '{original}-restored';
+  updateBatchPreview();
+  $('modal').classList.add('show');
+}
+function closeModal(){ $('modal').classList.remove('show') }
+function fixExt() {
+  const ext = $('m-container').value;
+  $('m-output').value = ($('m-output').value || 'out-restored').replace(/\.(mp4|mkv)$/i, '') + '.' + ext;
+}
+function jobBody(inputPath, outputName) {
+  return {
+    input: inputPath,
+    output_name: outputName || undefined,
+    output_pattern: $('m-pattern').value.trim() || undefined,
+    conflict: $('m-conflict').value || 'auto',
+    detection_model: $('m-det').value,
+    codec: $('m-codec').value,
+    segments: $('m-seg').value || undefined,
+    batch_size: parseInt($('m-batch').value) || 4,
+    temporal_overlap: parseInt($('m-overlap').value) || 8,
+    max_clip_size: parseInt($('m-clip').value) || undefined,
+    detection_score_threshold: $('m-threshold').value ? parseFloat($('m-threshold').value) : undefined,
+    max_detection_gap: $('m-gap').value ? parseInt($('m-gap').value) : undefined,
+    min_detection_duration: $('m-mindur').value ? parseInt($('m-mindur').value) : undefined,
+    denoise: ($('m-denoise').value && $('m-denoise').value !== 'none') ? $('m-denoise').value : undefined,
+    denoise_step: $('m-denoise').value ? $('m-denoisestep').value : undefined,
+    vr_mode: $('m-vr').value || undefined,
+    fp16: $('m-fp16').checked,
+    compile_basicvsrpp: $('m-compile').checked,
+    enable_crossfade: $('m-crossfade').checked,
+    scene_detection: $('m-scene').checked,
+    crf: $('m-quality').value ? parseInt($('m-quality').value) : undefined,
+    encoder: $('m-enc').value || undefined,
+    sharpen: parseFloat($('m-sharpen').value) || undefined,
+    encoder_settings: $('m-encset').value.trim() || undefined,
+    retarget_high_fps: $('m-retarget').checked || undefined,
+    fmp4: ($('m-fmp4').checked && !$('m-fmp4').disabled) || undefined,
+    post_export_action: $('m-pea').value || undefined,
+    post_export_command: $('m-pea').value === 'command' ? $('m-pec').value.trim() : undefined,
+  };
+}
+/* autofireBody 已随前端 autofire 链一并移除（0.1.20）：自动任务参数由后端
+   JASNA_AUTOCHAIN 统一决定（JASNA_DEFAULT_CRF / AUTO_DETECTION_MODEL），不再吃
+   浏览器端 jasna_lastcfg 快照——它是双链竞态重复建任务的源头之一。 */
+async function submitJob() {
+  $('m-submit').disabled = true;
+  try {
+    if (batchList) {
+      const errs = [];
+      for (const v of batchList) {
+        const d = await (await fetch(WEB + '/jobs', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(jobBody(v.path, null))})).json();
+        if (d.error) errs.push(v.name + '：' + d.error);
+      }
+      saveLastCfg();
+      closeModal();
+      if (errs.length) alert('部分入队失败：\n' + errs.join('\n'));
+      tab('tasks'); pollJobs();
+      return;
+    }
+    const d = await (await fetch(WEB + '/jobs', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(jobBody($('m-input').value, $('m-output').value || undefined))})).json();
+    if (d.error) { alert(d.error); return }
+    saveLastCfg();
+    closeModal(); tab('tasks'); pollJobs();
+  } finally { $('m-submit').disabled = false }
+}
+/* ===== 预设（localStorage） ===== */
+const PRESET_FIELDS = ['m-det','m-codec','m-container','m-conflict','m-quality','m-enc','m-denoise','m-denoisestep','m-pattern','m-batch','m-overlap','m-clip','m-gap','m-mindur','m-threshold','m-crossfade','m-scene','m-vr','m-fp16','m-compile','m-sharpen','m-encset','m-retarget','m-fmp4','m-pea','m-pec'];
+function lastCfgStore() { try { return JSON.parse(localStorage.getItem('jasna_lastcfg') || 'null') } catch (e) { return null } }
+function saveLastCfg() {
+  const p = presetCollect();
+  delete p['m-output'];
+  localStorage.setItem('jasna_lastcfg', JSON.stringify(p));
+}
+function applyLastCfg() {
+  const c = lastCfgStore();
+  if (!c) return false;
+  PRESET_FIELDS.forEach(id => {
+    if (id === 'm-output') return;
+    const el = $(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = c[id] !== undefined ? !!c[id] : el.defaultChecked;
+    else if (c[id]) el.value = c[id];
+  });
+  if (c['m-pea'] === 'command') $('m-pec').parentElement.style.display = '';
+  return true;
+}
+function resetToDefaults() {
+  resetModalFields();
+  $('m-seg-pick-field').style.display = '';
+}
+function presetStore() { try { return JSON.parse(localStorage.getItem('jasna_presets') || '{}') } catch { return {} } }
+function presetFill() {
+  const s = $('m-preset'); s.innerHTML = '<option value="">— 选择预设 —</option>';
+  Object.keys(presetStore()).sort().forEach(k => {
+    const o = document.createElement('option'); o.value = k; o.textContent = k; s.append(o);
+  });
+  const last = localStorage.getItem('jasna_last_preset') || '';
+  if (last && presetStore()[last]) { s.value = last; presetApply(last) }
+}
+function presetApply(name) {
+  name = name || $('m-preset').value;
+  const p = presetStore()[name];
+  if (!p) return;
+  PRESET_FIELDS.forEach(id => {
+    const el = $(id); if (!el) return;
+    if (el.type === 'checkbox') el.checked = p[id] !== undefined ? !!p[id] : el.defaultChecked;
+    else el.value = p[id] || (el.tagName === 'SELECT' ? el.querySelector('option')?.value || '' : '');
+  });
+  if (p['m-pea'] === 'command') $('m-pec').parentElement.style.display = '';
+  localStorage.setItem('jasna_last_preset', name);
+}
+function presetCollect() {
+  const p = {};
+  PRESET_FIELDS.forEach(id => { const el = $(id); if (el) p[id] = el.type === 'checkbox' ? el.checked : el.value });
+  return p;
+}
+function presetSave() {
+  const name = prompt('预设名称：', $('m-preset').value === '' ? '' : $('m-preset').value);
+  if (!name) return;
+  const st = presetStore(); st[name] = presetCollect();
+  localStorage.setItem('jasna_presets', JSON.stringify(st));
+  localStorage.setItem('jasna_last_preset', name);
+  presetFill(); $('m-preset').value = name;
+}
+function presetDelete() {
+  const name = $('m-preset').value;
+  if (!name) return;
+  const st = presetStore(); delete st[name];
+  localStorage.setItem('jasna_presets', JSON.stringify(st));
+  localStorage.removeItem('jasna_last_preset');
+  presetFill();
+}
+
+/* ===== 专家参数开关（偏好存 localStorage；默认只露快速项，弹窗一屏放下） ===== */
+function expertOn() { return localStorage.getItem('jasna_expert') === 'on' }
+function expertApply() {
+  const c = $('m-expert');
+  if (!c) return;
+  c.checked = expertOn();
+  $('m-expert-zone').style.display = expertOn() ? '' : 'none';
+}
+function toggleExpert() { localStorage.setItem('jasna_expert', $('m-expert').checked ? 'on' : 'off'); expertApply() }
+
+/* ===== 素材库（多选批量 + 搜索/排序；DESIGN.md 媒体查找包） ===== */
+let libSel = new Set();
+let libCache = new Map();
+let videoList = [], videosLoaded = false;
+function srcGone(r) {
+  // 源片存在性：以最近一次 /videos 列表为准（列表加载前不误判，重试有后端兜底）
+  if (!r || !r.input || !videosLoaded) return false;
+  return !videoList.some(v => v.name === r.input.split('/').pop());
+}
+let vq = '';
+let vSort = localStorage.getItem('jasna_vsort') || 'mtime-';
+const vKeyOf = v => ({ name: 0, res: v.width || 0, dur: v.duration || 0, size: v.size_mb || 0, mtime: v.mtime || 0 });
+function sortGlyph(t, k) {
+  const cur = t === 'v' ? vSort : oSort;
+  if (!cur.startsWith(k + '-')) return ' ↕';
+  return cur.endsWith('-') ? ' ↓' : ' ↑';
+}
+function setSort(t, k) {
+  if (t === 'v') { vSort = k + (vSort === k + '-' ? '+' : '-'); localStorage.setItem('jasna_vsort', vSort); renderVThead(); renderVideoRows() }
+  else { oSort = k + (oSort === k + '-' ? '+' : '-'); localStorage.setItem('jasna_osort', oSort); renderOThead(); renderOutputRows() }
+}
+function cmpList(sort, keyOf) {
+  const desc = sort.endsWith('-'), k = sort.slice(0, -1);
+  return (a, b) => {
+    const d = k === 'name' ? a.name.toLowerCase().localeCompare(b.name.toLowerCase(), 'zh')
+                           : (keyOf(a)[k] || 0) - (keyOf(b)[k] || 0);
+    return desc ? -d : d;
+  };
+}
+function sortableHeads(t, cols) {
+  return cols.map(s => { const [k, label] = s.split('|');
+    return '<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="setSort(\'' + t + '\',\'' + k + '\')">' + label + sortGlyph(t, k) + '</th>';
+  }).join('');
+}
+function renderVThead() {
+  $('v-thead').innerHTML = '<tr><th style="width:30px"></th><th style="width:64px"></th>' +
+    sortableHeads('v', ['name|文件', 'res|分辨率', 'dur|时长', 'size|大小', 'mtime|时间']) + '<th>操作</th></tr>';
+}
+function onVSearch(q) { vq = q.trim().toLowerCase(); renderVideoRows() }
+async function loadVideos() {
+  try {
+    const d = await (await fetch(WEB + '/videos')).json();
+    videoList = d.videos || [];
+    videosLoaded = true;
+    libCache = new Map(videoList.map(v => [v.name, v]));
+    fillScanSelect(videoList);
+    renderVThead(); renderVideoRows();
+    renderTasks();  // 源片存在性变化 → 刷新任务卡重试按钮的禁用态
+  } catch { $('vlib').innerHTML = '<tr><td colspan="8" class="dim">加载失败（web 服务不可达）</td></tr>' }
+}
+function renderVideoRows() {
+  const tb = $('vlib');
+  const shown = videoList.filter(v => !vq || v.name.toLowerCase().includes(vq)).sort(cmpList(vSort, vKeyOf));
+  $('v-count').textContent = videoList.length ? (shown.length + ' / ' + videoList.length) : '';
+  tb.innerHTML = shown.length ? '' : '<tr><td colspan="8" class="dim">' + (vq ? '无匹配「' + escH(vq) + '」' : '空') + '</td></tr>';
+  shown.forEach(v => {
+    const tr = document.createElement('tr');
+    const td0 = document.createElement('td');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = libSel.has(v.path);
+    cb.onchange = () => { cb.checked ? libSel.add(v.path) : libSel.delete(v.path); renderLibSelbar() };
+    td0.append(cb); tr.append(td0);
+    tr.insertAdjacentHTML('beforeend', '<td>' + thumbHtml(WEB + '/media/' + encodeURIComponent(v.name)) + '</td>');
+    tr.insertAdjacentHTML('beforeend', '<td>' + v.name + '</td><td class="dim">' + (v.width || '?') + '×' + (v.height || '?') + '</td><td class="dim">' + fmtDur(v.duration) + '</td><td class="dim">' + fmtSize(v.size_mb) + '</td><td class="dim">' + new Date((v.mtime || 0) * 1000).toLocaleDateString() + '</td>');
+    const td = document.createElement('td');
+    const b1 = document.createElement('button'); b1.className = 'btn mini'; b1.textContent = '处理'; b1.onclick = () => openModal(v);
+    const b2 = document.createElement('button'); b2.className = 'btn sec mini'; b2.textContent = '预览';
+    b2.onclick = () => { openSpanPv(v.path.split('/').pop(), 0) };
+    const b3 = document.createElement('button'); b3.className = 'btn sec mini'; b3.textContent = '扫描';
+    b3.onclick = () => { openSegTab(v.path); startScanFor(v.path) };
+    const b4 = document.createElement('button'); b4.className = 'btn danger mini'; b4.textContent = '删除';
+    b4.onclick = () => openDelModal([v]);
+    const acts = document.createElement('div'); acts.className = 'actions'; acts.append(b1, b2, b3, b4);
+    td.append(acts); tr.append(td); tb.append(tr);
+  });
+  renderLibSelbar();
+  hydrateThumbs(tb);
+}
+function renderLibSelbar() {
+  $('lib-sel-n').textContent = libSel.size;
+  $('lib-selbar').classList.toggle('show', libSel.size > 0);
+}
+async function batchFromSelection() {
+  const vids = [];
+  libSel.forEach(p => { const name = p.split('/').pop(); vids.push({path: p, name}) });
+  if (!vids.length) return;
+  openModalBatch(vids);
+}
+function clearLibSelection() { libSel.clear(); renderLibSelbar(); loadVideos() }
+
+/* ===== 素材删除（占用判定以后端 409 为准：任务/扫描/上传会话三源） ===== */
+let delQueue = [];
+function countScansFor(names) {
+  return (lastScanList || []).filter(s => s.state === 'done'
+    && names.includes((s.input || '').split('/').pop())).length;
+}
+function openDelModal(items) {
+  delQueue = items;
+  const totalMb = items.reduce((s, v) => s + (v.size_mb || 0), 0);
+  const scanN = countScansFor(items.map(v => v.name));
+  const names = items.length > 1
+    ? items.slice(0, 8).map(v => escH(v.name)).join('<br>') + (items.length > 8 ? '<br>… 共 ' + items.length + ' 个' : '')
+    : escH(items[0].name);
+  $('del-title').textContent = items.length > 1 ? '删除 ' + items.length + ' 个素材' : '删除素材';
+  $('del-body').innerHTML = names +
+    '<br>合计 ' + fmtSize(totalMb) +
+    (scanN ? '<br>将同时删除关联的 ' + scanN + ' 份扫描缓存' : '') +
+    '<br><span style="color:var(--err)">不可恢复：源文件从 /videos 移除，已产出的成品不受影响</span>';
+  $('delmodal').classList.add('show');
+}
+function closeDelModal() { $('delmodal').classList.remove('show') }
+function deleteFromSelection() {
+  const items = [];
+  libSel.forEach(p => { const name = p.split('/').pop(); items.push(libCache.get(name) || {name}) });
+  if (items.length) openDelModal(items);
+}
+function pruneThumb(src) {
+  thumbMem.delete(src);
+  try { const st = thumbStore(); if (st[src]) { delete st[src]; thumbSave(st) } } catch (e) {}
+}
+function blockText(b) {
+  const t = { job: '有处理任务正在进行', scan: '有扫描正在进行', upload: '有未完成的上传会话' };
+  const x = (b || [])[0];
+  return x ? (t[x.type] || '占用中') : '占用中';
+}
+async function confirmDel() {
+  closeDelModal();
+  let okN = 0; const blocked = [], failed = [];
+  for (const v of delQueue) {
+    const n = v.name;
+    try {
+      const r = await fetch(WEB + '/videos/' + encodeURIComponent(n), { method: 'DELETE' });
+      if (r.ok || r.status === 404) {   // 404 = 已被手工删过，视为成功
+        okN++; libSel.delete('/videos/' + n);
+        pruneThumb(WEB + '/media/' + encodeURIComponent(n));
+      } else if (r.status === 409) {
+        const d = await r.json().catch(() => ({}));
+        blocked.push(n + '：' + blockText(d.blocked_by));
+      } else {
+        failed.push(n + '（HTTP ' + r.status + '）');
+      }
+    } catch (e) { failed.push(n + '（' + e + '）') }
+  }
+  renderLibSelbar(); loadVideos();
+  if (blocked.length || failed.length)
+    alert('已删除 ' + okN + ' 个\n' + blocked.map(x => '跳过 ' + x).join('\n') + '\n' + failed.map(x => '失败 ' + x).join('\n'));
+}
+
+/* ===== 成品库（搜索+排序+收藏；标记存后端 sidecar 跨设备一致） ===== */
+let outputList = [], mediaMeta = null, oq = '', oFilter = 'all';
+let oSort = localStorage.getItem('jasna_osort') || 'mtime-';
+const oKeyOf = o => ({ name: 0, size: o.size_mb || 0, mtime: o.mtime || 0 });
+async function loadMediaMeta() {
+  try { mediaMeta = ((await (await fetch(WEB + '/media-meta')).json()).meta) || {} }
+  catch { mediaMeta = null }   // 标记不可用：星标只读降级，不阻塞列表
+}
+function isFav(name) { return !!(mediaMeta && mediaMeta[name] && mediaMeta[name].fav) }
+async function toggleFav(name) {
+  if (!mediaMeta) { alert('标记服务不可用（/media-meta），收藏暂无法保存'); return }
+  const target = !isFav(name);
+  // 乐观更新，失败回滚
+  if (target) mediaMeta[name] = Object.assign({}, mediaMeta[name], { fav: true });
+  else if (mediaMeta[name]) mediaMeta[name].fav = false;
+  renderOutputRows();
+  try {
+    const r = await fetch(WEB + '/media-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, fav: target }) });
+    if (!r.ok) throw 0;
+    if (!target) delete mediaMeta[name];
+  } catch (e) {
+    if (target) mediaMeta[name].fav = false;
+    else mediaMeta[name] = Object.assign({}, mediaMeta[name], { fav: true });
+    renderOutputRows(); alert('收藏同步失败（网络/服务异常），已还原');
+  }
+}
+function setOFilter(f) {
+  oFilter = f;
+  $('of-all').classList.toggle('on', f === 'all');
+  $('of-fav').classList.toggle('on', f === 'fav');
+  renderOutputRows();
+}
+function renderOThead() {
+  $('o-thead').innerHTML = '<tr><th style="width:36px" title="收藏"></th><th style="width:64px"></th>' +
+    sortableHeads('o', ['name|文件', 'size|大小', 'mtime|完成时间']) + '<th>操作</th></tr>';
+}
+function onOSearch(q) { oq = q.trim().toLowerCase(); renderOutputRows() }
+async function loadOutputs() {
+  try {
+    const d = await (await fetch(UP('/outputs'))).json();
+    outputList = d.outputs || [];
+    renderOThead(); renderOutputRows();
+  } catch { $('olib').innerHTML = '<tr><td colspan="6" class="dim">加载失败</td></tr>' }
+}
+function renderOutputRows() {
+  const tb = $('olib');
+  let shown = outputList.filter(o => !oq || o.name.toLowerCase().includes(oq));
+  if (oFilter === 'fav') shown = shown.filter(o => isFav(o.name));
+  shown = shown.slice().sort(cmpList(oSort, oKeyOf));
+  $('o-count').textContent = outputList.length ? (shown.length + ' / ' + outputList.length) : '';
+  const emptyMsg = (oq || oFilter === 'fav') ? '无匹配' + (oq ? '「' + escH(oq) + '」' : '') + (oFilter === 'fav' ? '（收藏）' : '') : '空（完成任务后产出）';
+  tb.innerHTML = shown.length ? '' : '<tr><td colspan="6" class="dim">' + emptyMsg + '</td></tr>';
+  // 版本链识别（2026-09-05 P2）：X-restored.mp4 与 X-restored-N.mp4 同源分组——
+  // 重试/冲突递增的 -N 堆积是磁盘杀手（x3 实测一片三代旧版 23.5G）。旧版标徽记，最新版一键清旧版
+  const verBase = n => { const m = n.match(/^(.*)-restored(?:-\d+)?\.(mp4|mkv)$/i); return m ? m[1] : null };
+  const staleSet = new Set(); const groupBtn = new Map();
+  { const gs = new Map();
+    shown.forEach(o => { const b = verBase(o.name); if (b === null) return;
+      if (!gs.has(b)) gs.set(b, []); gs.get(b).push(o); });
+    gs.forEach(list => { if (list.length < 2) return;
+      const newest = list.slice().sort((a, b2) => b2.mtime - a.mtime)[0];
+      const stale = list.filter(o => o !== newest);
+      stale.forEach(o => staleSet.add(o.name));
+      groupBtn.set(newest.name, { n: stale.length, mb: Math.round(stale.reduce((s, o) => s + (o.size_mb || 0), 0)),
+                                   stale: stale.map(o => o.name) });
+    });
+  }
+  shown.forEach(o => {
+    const tr = document.createElement('tr');
+    const fav = document.createElement('td');
+    const fb = document.createElement('button');
+    const on = isFav(o.name);
+    fb.className = 'fav-star' + (on ? ' on' : ''); fb.textContent = on ? '★' : '☆';
+    fb.title = on ? '取消收藏' : '收藏'; fb.setAttribute('aria-pressed', on);
+    fb.onclick = () => toggleFav(o.name);
+    fav.append(fb); tr.append(fav);
+    if (oSelect) {   // 多选模式：复选框挂在收藏格（收藏默认不勾，★ 行悬停有提示）
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.style.marginLeft = '6px';
+      cb.checked = oSelected.has(o.name);
+      if (isFav(o.name)) cb.title = '该文件已收藏 ★——批量删除不会自动跳过，请确认';
+      cb.onclick = (ev) => { ev.stopPropagation(); cb.checked ? oSelected.add(o.name) : oSelected.delete(o.name); renderOSelBar() };
+      fav.append(cb);
+    }
+    const jb = jobList.find(x => (x.output || '').split('/').pop() === o.name);
+    tr.insertAdjacentHTML('beforeend', '<td>' + thumbHtml(WEB + '/outputs/' + encodeURIComponent(o.name)) + '</td>');
+    tr.insertAdjacentHTML('beforeend', '<td>' + o.name + (staleSet.has(o.name) ? ' <span class="dim">·旧版</span>' : '') + '</td><td class="dim">' + fmtSize(o.size_mb) + '</td><td class="dim">' + new Date(o.mtime * 1000).toLocaleString() + '</td>');
+    const td = document.createElement('td'); const acts = document.createElement('div'); acts.className = 'actions';
+    const bp = document.createElement('button'); bp.className = 'btn sec mini'; bp.textContent = jb && jb.input ? '对比' : '预览';
+    bp.onclick = () => previewOutput(o.name, jb && jb.input);
+    const a = document.createElement('a'); a.className = 'btn sec mini'; a.textContent = '回传';
+    a.href = UP('/outputs/' + o.name) + '?dl=1'; a.style.textDecoration = 'none';
+    const b2 = document.createElement('button'); b2.className = 'btn sec mini'; b2.textContent = '保存到懒猫网盘'; b2.onclick = () => driveSave(o.name);
+    const b3 = document.createElement('button'); b3.className = 'btn danger mini'; b3.textContent = '删除';
+    b3.onclick = async () => { if (!confirm('删除成品 ' + o.name + '？（不可恢复）')) return;
+      const r = await fetch(WEB + '/outputs/' + o.name, {method:'DELETE'}); const d2 = await r.json();
+      if (d2.error) alert(d2.error); loadOutputs() };
+    const gb = groupBtn.get(o.name);
+    if (gb) { const b4 = document.createElement('button'); b4.className = 'btn sec mini';
+      b4.textContent = '清旧版(' + gb.n + ')'; b4.title = '同源旧版本 ' + gb.n + ' 个，约 ' + gb.mb + 'MB';
+      b4.onclick = async () => {
+        if (!confirm('删除该片的 ' + gb.n + ' 个旧版本成品（约 ' + gb.mb + 'MB，保留最新）？不可恢复')) return;
+        for (const nm of gb.stale) { try { await fetch(WEB + '/outputs/' + encodeURIComponent(nm), {method:'DELETE'}) } catch (e) {} }
+        loadOutputs();
+      };
+      acts.append(b4);
+    }
+    acts.append(bp, a, b2, b3); td.append(acts); tr.append(td); tb.append(tr);
+  });
+  hydrateThumbs(tb);
+  renderOSelBar();
+}
+
+/* ===== 成品库多选批量删除（2026-09-06；收藏默认不勾但可强选，confirm 点名警告） ===== */
+let oSelect = false;
+const oSelected = new Set();
+function toggleOSelect() {
+  oSelect = !oSelect; oSelected.clear();
+  const b = $('oselect-btn');
+  if (b) { b.textContent = oSelect ? '取消选择' : '选择'; b.className = oSelect ? 'btn mini' : 'btn sec mini' }
+  renderOutputRows();
+}
+function oSelectToggleAll() {
+  const shown = outputList.filter(o => !oq || o.name.toLowerCase().includes(oq));
+  const allOn = shown.every(o => oSelected.has(o.name));
+  shown.forEach(o => allOn ? oSelected.delete(o.name) : oSelected.add(o.name));
+  renderOutputRows();
+}
+function renderOSelBar() {
+  const bar = $('osel-bar'); if (!bar) return;
+  const list = outputList.filter(o => oSelected.has(o.name));
+  bar.style.display = (oSelect && list.length) ? 'flex' : 'none';
+  if (!list.length) return;
+  const mb = list.reduce((s, o) => s + (o.size_mb || 0), 0);
+  const favN = list.filter(o => isFav(o.name)).length;
+  bar.innerHTML = `<span>已选 <b>${list.length}</b> 个 · ${fmtSize(mb)}` +
+    (favN ? ` <span style="color:#d29922">（含收藏 ${favN}）</span>` : '') + `</span>` +
+    `<button class="btn danger mini" onclick="batchDelOutputs()">批量删除</button>` +
+    `<button class="btn sec mini" onclick="oSelectToggleAll()">全选/反选</button>`;
+}
+async function batchDelOutputs() {
+  const list = outputList.filter(o => oSelected.has(o.name));
+  const mb = list.reduce((s, o) => s + (o.size_mb || 0), 0);
+  const favN = list.filter(o => isFav(o.name)).length;
+  if (!confirm(`删除 ${list.length} 个成品（${fmtSize(mb)}）？不可恢复` +
+      (favN ? `\n注意：其中 ${favN} 个是收藏（★）文件！` : ''))) return;
+  for (const o of list) { try { await fetch(WEB + '/outputs/' + encodeURIComponent(o.name), {method:'DELETE'}) } catch (e) {} }
+  oSelected.clear();
+  loadOutputs(); loadSpace();
+}
+
+/* ===== 段编辑（scan/undo/refilter，沿用 v0.11.x） ===== */
+let curScan = null;
+let undoStack = [], redoStack = [];
+function spansSnapshot() { return JSON.stringify((curScan && curScan.spans) || []) }
+function spansPush() { undoStack.push(spansSnapshot()); if (undoStack.length > 50) undoStack.shift(); redoStack = [] }
+function spansRestore(json) { if (!curScan) return; curScan.spans = JSON.parse(json); renderScan() }
+function spansUndo() { if (!undoStack.length || !curScan) return; redoStack.push(spansSnapshot()); spansRestore(undoStack.pop()) }
+function spansRedo() { if (!redoStack.length || !curScan) return; undoStack.push(spansSnapshot()); spansRestore(redoStack.pop()) }
+document.addEventListener('keydown', e => {
+  if (!segOverlayOpen() || $('modal').classList.contains('show')) return;
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); spansUndo() }
+  else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); spansRedo() }
+});
+let refilterTimer = null;
+function refilterDebounced() { clearTimeout(refilterTimer); refilterTimer = setTimeout(doRefilter, 450) }
+async function doRefilter() {
+  if (!curScan || curScan.state !== 'done') return;
+  const thr = parseFloat($('refilter-thr').value);
+  try {
+    const r = await fetch(`${WEB}/scans/${curScan.id}/refilter`, {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({threshold: thr})});
+    const d = await r.json();
+    if (d.error) { $('scan-status').textContent = '重过滤：' + d.error; return }
+    curScan = d; undoStack = []; redoStack = [];
+    renderScan();
+  } catch (e) { $('scan-status').textContent = '重过滤请求失败：' + e }
+}
+let lastScanList = [];
+/* ===== 素材暂存状态机（上传→扫描→就绪→发起处理）：状态从服务端 /scans 推导 ===== */
+function scanStateFor(name) {
+  if (!lastScanList) return null;
+  const list = lastScanList.filter(s => s.input === '/videos/' + name && s.src_valid !== false);
+  const act = list.find(s => s.state === 'queued' || s.state === 'running');
+  return act || list[0] || null;   // 活态优先，否则最新一条（服务端按时间倒序）
+}
+function spansStrFor(sc) {
+  return (sc.spans || []).map(s => Math.round(s.start) + '-' + Math.round(s.end)).join(',');
+}
+function fireScanFor(name) {
+  fetch(WEB + '/scan', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({input: '/videos/' + name, detection_model: 'rfdetr-v6-large'})}).catch(() => {});
+}
+function stagedScanTick() {
+  // ① 补发扫描：入库行还没有扫描且 GPU 空闲 → 自动开扫（GPU 忙时任务结束后由本钩子接手）
+  uploadRows.forEach(r => {
+    if (r.state !== 'ready') return;
+    if (jobList.some(j => ['running', 'queued', 'paused'].includes(j.state))) return;
+    if (scanStateFor(r.name)) return;
+    maybeAutoScan(r.name);
+  });
+  // ② 自动建任务已整体移交后端 JASNA_AUTOCHAIN（0.1.20 拆双链）：这里曾与后端钩子
+  // 在扫描完成瞬间各建一个任务（相隔 21ms——前端 jobList 快照必然滞后于后端即时落库，
+  // 本地判重形同虚设），导致已完成视频被重复处理。补发扫描 ① 保留（服务端有判重），
+  // 建任务只留后端一条链：即时、判重覆盖任意状态（含 done）、页面关了不断链。
+}
+async function pollScans() {
+  try {
+    const d = await (await fetch(WEB + '/scans')).json();
+    const list = d.scans || [];
+    const sig = s => s.id + ':' + s.state + ':' + (s.spans || []).length;
+    const changed = list.map(sig).join() !== (lastScanList || []).map(sig).join();
+    lastScanList = list;
+    stagedScanTick();
+    if (changed) renderTasks();
+  } catch {}
+  if (!segOverlayOpen()) return;
+  try {
+    const list = lastScanList || [];
+    if (!curScan && list.length) {
+      curScan = list[0];
+      $('refilter-thr').value = curScan.threshold || 0.30;
+      $('refilter-thr-val').textContent = ($('refilter-thr').value);
+      renderScan();
+    } else if (curScan) {
+      // 同片聚合：本条还在排队而同片已有 running 时，改跟踪 running 那条（重复提交的旧数据也能归一）
+      let fresh = list.find(s => s.id === curScan.id);
+      if (fresh && fresh.state === 'queued') {
+        const twin = list.find(s => s.input === curScan.input && s.state === 'running' && s.src_valid !== false);
+        if (twin) { curScan = twin; undoStack = []; redoStack = []; renderScan(); return }
+      }
+      if (fresh && fresh.state !== curScan.state) { curScan = fresh; renderScan() }
+      else if (fresh && (fresh.state === 'running' || fresh.state === 'queued')) { curScan = fresh; renderScanStatus() }
+    }
+    updateScanButton();
+  } catch {}
+}
+// 旧固定轮询 setInterval(pollScans, 2500) 已由上方活动感知双档取代
+// （流式守卫 setInterval 已随 0.1.22 边修边看下线一并移除）
+setInterval(() => {   // 排队/扫描中的已等待秒数逐秒走字，避免"毫无反馈"
+  if (segOverlayOpen() && curScan && (curScan.state === 'queued' || curScan.state === 'running')) renderScanStatus();
+}, 1000);
+function updateScanButton() {
+  const b = $('scan-start-btn');
+  if (!b) return;
+  const busy = !!(curScan && (curScan.state === 'queued' || curScan.state === 'running'));
+  b.disabled = busy;
+  b.textContent = busy ? '扫描进行中' : (curScan && curScan.state === 'done' ? '重新扫描' : '开始扫描');
+}
+function renderScanStatus() {
+  const sc = curScan; if (!sc) return;
+  const names = {queued: '排队中', running: '扫描中', done: '扫描完成', failed: '扫描失败'};
+  const parts = [];
+  if (sc.state === 'queued' || sc.state === 'running') {
+    parts.push('<span class="scan-live">' + (names[sc.state] || sc.state) + '</span>');
+    const waitSec = Math.max(0, Math.round(Date.now() / 1000 - (sc.created_at || 0)));
+    if (waitSec > 0) parts.push('已' + (sc.state === 'queued' ? '等待 ' : '运行 ') + fmtDur(waitSec));
+    if (sc.state === 'queued') {
+      const ahead = lastScanList.filter(s => (s.state === 'running' || s.state === 'queued') && s.created_at < sc.created_at).length;
+      parts.push(ahead > 0 ? '前面还有 ' + ahead + ' 个扫描' : '扫描线程即将接手');
+    }
+    const tl = (() => { const ok = (sc.tail || []).filter(l => l && !l.trim().startsWith('{')); return ok.length ? ok[ok.length - 1].slice(0, 90) : '' })();
+    if (tl) parts.push(escH(tl));
+    else if (sc.state === 'running') parts.push('加载检测模型/读片中（首次约 20-40s）');
+  } else {
+    parts.push(names[sc.state] || sc.state);
+    if (sc.state === 'done') {
+      parts.push((sc.spans || []).length + ' 段');
+      parts.push(fmtDur(Math.max(60, Date.now() / 1000 - (sc.created_at || 0))) + '前');
+    }
+  }
+  $('scan-status').innerHTML = parts.join(' · ');
+  updateScanButton();
+}
+function renderScan() {
+  const sc = curScan; if (!sc) return;
+  $('scan-target').textContent = sc.input.split('/').pop() + ' · ' + sc.detection_model;
+  renderScanStatus();
+  const spans = sc.spans || [];
+  const tl = $('timeline'); tl.innerHTML = '';
+  const lastEnd = spans.length ? spans[spans.length - 1].end : 0;
+  const total = (curScan.duration && curScan.duration > lastEnd) ? curScan.duration : (spans.length ? lastEnd + 1 : 1);
+  window.tlTotal = total;
+  window.tlBlocks = [];
+  spans.forEach((sp, i) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:absolute;left:' + (sp.start/total*100) + '%;width:' + Math.max(0.3, (sp.end-sp.start)/total*100) + '%;top:0;bottom:0;border-radius:4px;cursor:pointer;box-sizing:border-box;border:1px solid rgba(255,255,255,.18)';
+    d.className = 'tl-block';
+    if (sp.manual) { d.classList.add('tl-manual'); d.style.zIndex = 1 }   // 检出段(默认层)压在手动范围之上，重叠时绿仍可见
+    d.title = fmtTs(sp.start) + '-' + fmtTs(sp.end) + ' · 单击选中/取消 · 双击跳预览 · 拖边缘微调';
+    d.dataset.i = i;
+    const hl = document.createElement('div');
+    hl.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:7px;cursor:ew-resize;background:rgba(255,255,255,.14);border-radius:4px 0 0 4px';
+    hl.dataset.edge = 'l';
+    const hr = document.createElement('div');
+    hr.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:7px;cursor:ew-resize;background:rgba(255,255,255,.14);border-radius:0 4px 4px 0';
+    hr.dataset.edge = 'r';
+    d.append(hl, hr);
+    d.addEventListener('pointerdown', e => { e.stopPropagation(); tlBlockDown(e, i); });
+    d.addEventListener('dblclick', () => previewAt(curScan.spans[i]));
+    tl.append(d);
+    window.tlBlocks.push(d);
+  });
+  syncTlSelection();
+  const wrap = $('spans'); wrap.innerHTML = spans.length ? '' : '<p class="dim">无检测范围（全片阴性或扫描未完成）</p>';
+  spans.forEach((sp, i) => {
+    const card = document.createElement('div'); card.className = 'card'; card.style.margin = '0'; card.dataset.i = i;
+    const img = sp.thumb ? '<img src="data:image/jpeg;base64,' + sp.thumb + '" style="width:100%;border-radius:6px;margin-top:8px" alt="">' : '';
+    card.innerHTML = '<div class="row" style="justify-content:space-between">' +
+      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+      '<input type="checkbox" checked onchange="toggleSpan(' + i + ')">' +
+      (sp.manual
+        ? '<span style="color:var(--acc);font-size:11.5px">手动添加</span>'
+        : '<span class="dim">(' + sp.samples + '采样 · 占比 ' + ((sp.max_box_ratio || 0) * 100).toFixed(1) + '%)</span>') +
+      '</label>' +
+      '<span class="actions">' +
+      '<button class="btn sec mini" onclick="previewAt(curScan.spans[' + i + '])">预览</button>' +
+      '<button class="btn danger mini" onclick="deleteSpan(' + i + ')">删除</button>' +
+      '</span></div>' +
+      '<div class="row" style="gap:6px;margin-top:6px">' +
+      '<input type="number" step="0.5" min="0" value="' + sp.start + '" onchange="adjustSpan(' + i + ',\'start\',this.value)" style="width:90px;background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:4px 6px;font-size:13px">' +
+      '<span class="dim">→</span>' +
+      '<input type="number" step="0.5" min="0" value="' + sp.end + '" onchange="adjustSpan(' + i + ',\'end\',this.value)" style="width:90px;background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:4px 6px;font-size:13px">' +
+      '<span class="dim">秒</span></div>' + img;
+    wrap.append(card);
+  });
+  refreshSelNote();
+}
+let spanpvName = null;
+function openSpanPv(name, start, label) {
+  spanpvName = name;
+  $('spanpv-title').textContent = label || name;
+  const v = $('spanpv-video');
+  v.src = WEB + '/media/' + encodeURIComponent(name);
+  $('spanpv').classList.add('show');
+  const jump = () => { try { v.currentTime = Math.max(0, start) } catch (e) {} v.play().catch(() => {}) };
+  if (v.readyState >= 1) jump(); else v.addEventListener('loadedmetadata', jump, {once: true});
+}
+/* ===== 边修边看（流式预览）：占用闸门 + 同源 iframe 驱动上游播放器 + 关闭即停 ===== */
+function gpuBusyText() {
+  const jb = jobList.some(j => ['running', 'queued', 'paused'].includes(j.state));
+  if (jb) return '有任务正在处理/排队/暂停中';
+  if ((lastScanList || []).some(s => s.state === 'queued' || s.state === 'running')) return '有扫描正在进行';
+  return '';
+}
+/* 边修边看（流式）入口与 /jasna/ 反代路由已随 0.1.22 去设备绑定移除：
+   x3 流管线本身有上游级缺陷（交接文档 §6.3b），将来修复后以独立 traefik host 方案回归。 */
+function closeSpanPv() {
+  const v = $('spanpv-video');
+  try { v.pause() } catch (e) {}
+  v.removeAttribute('src'); v.load();
+  $('spanpv').classList.remove('show');
+}
+function previewAt(sp) {
+  if (!curScan || !sp) return;
+  const name = curScan.input.split('/').pop();
+  openSpanPv(name, Math.max(0, sp.start - 1), name + ' · ' + fmtTs(sp.start) + ' 起');
+}
+function adjustSpan(i, field, value) {
+  if (!curScan || !curScan.spans[i]) return;
+  spansPush();
+  curScan.spans[i][field] = Math.max(0, parseFloat(value) || 0);
+  refreshSelNote();
+}
+function deleteSpan(i) {
+  if (!curScan || !curScan.spans[i]) return;
+  spansPush();
+  curScan.spans.splice(i, 1);
+  renderScan();
+}
+function addSpanManual() {
+  if (!curScan) { alert('先扫描或选择一次扫描'); return }
+  const s = parseFloat($('span-add-start').value), e2 = parseFloat($('span-add-end').value);
+  if (isNaN(s) || isNaN(e2) || e2 <= s) { alert('范围无效（止需大于起）'); return }
+  spansPush();
+  curScan.spans.push({start: s, end: e2, samples: 0, max_box_ratio: 0, thumb: '', manual: true});
+  mergeSpans();
+  $('span-add-start').value = ''; $('span-add-end').value = '';
+  renderScan();
+}
+function toggleSpan(i) {
+  const cards = $('spans').querySelectorAll('.card');
+  if (cards[i]) { const cb = cards[i].querySelector('input'); cb.checked = !cb.checked }
+  syncTlSelection();
+  refreshSelNote();
+}
+function mergeSpans() {
+  // 同类型才合并（检出↔检出、手动↔手动）：手动粗范围不得吞并检出段，否则"按检出细分"无从谈起
+  const arr = (curScan.spans || []).slice().sort((a, b) => a.start - b.start);
+  const out = [];
+  arr.forEach(sp => {
+    let last = null;
+    for (let k = out.length - 1; k >= 0; k--) {
+      if (!!out[k].manual === !!sp.manual) { last = out[k]; break }
+    }
+    if (last && sp.start <= last.end) {
+      last.end = Math.max(last.end, sp.end);
+      last.samples = (last.samples || 0) + (sp.samples || 0);
+      last.max_box_ratio = Math.max(last.max_box_ratio || 0, sp.max_box_ratio || 0);
+      if (!last.thumb) last.thumb = sp.thumb || '';
+      last.manual = last.manual || sp.manual || undefined;
+    } else {
+      out.push({start: sp.start, end: sp.end, samples: sp.samples || 0, max_box_ratio: sp.max_box_ratio || 0, thumb: sp.thumb || '', manual: sp.manual || undefined});
+    }
+  });
+  curScan.spans = out;
+}
+function syncTlSelection() {
+  const cards = $('spans').querySelectorAll('.card');
+  (window.tlBlocks || []).forEach((b, i) => {
+    const cb = cards[i] && cards[i].querySelector('input');
+    const on = cb && cb.checked;
+    b.classList.toggle('tl-off', !on);
+    if (cards[i]) cards[i].classList.toggle('span-off', !on);
+  });
+}
+function setAllSpans(on) {
+  if (!curScan) return;
+  spansPush();
+  $('spans').querySelectorAll('.card input').forEach(cb => { cb.checked = on });
+  syncTlSelection();
+  refreshSelNote();
+}
+let tlDrag = null;
+function tlTime(e) {
+  const r = $('timeline').getBoundingClientRect();
+  return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * window.tlTotal;
+}
+function tlBlockDown(e, idx) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  const edge = e.target.dataset && e.target.dataset.edge;
+  if (edge === 'l' || edge === 'r') {
+    tlDrag = {mode: edge === 'l' ? 'resize-l' : 'resize-r', idx};
+    spansPush();
+  } else {
+    tlDrag = {mode: 'click', idx, x: e.clientX, y: e.clientY};
+  }
+  window.addEventListener('pointermove', tlPointerMove);
+  window.addEventListener('pointerup', tlPointerUp);
+}
+function tlContainerDown(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  if (e.target !== $('timeline')) return;  // 只响应空白处
+  e.preventDefault();
+  const t0 = tlTime(e);
+  tlDrag = {mode: 'create', t0, cur: t0};
+  spansPush();
+  const g = document.createElement('div');
+  g.id = 'tl-ghost';
+  g.style.cssText = 'position:absolute;top:0;bottom:0;background:rgba(77,163,255,.35);border:1px dashed var(--acc)';
+  $('timeline').append(g);
+  window.addEventListener('pointermove', tlPointerMove);
+  window.addEventListener('pointerup', tlPointerUp);
+}
+function tlPointerMove(e) {
+  if (!tlDrag) return;
+  const t = tlTime(e);
+  if (tlDrag.mode === 'create') {
+    tlDrag.cur = t;
+    const g = $('tl-ghost');
+    if (g) {
+      const a = Math.min(tlDrag.t0, t), b = Math.max(tlDrag.t0, t);
+      g.style.left = (a / window.tlTotal * 100) + '%';
+      g.style.width = Math.max(0.2, (b - a) / window.tlTotal * 100) + '%';
+    }
+  } else if (tlDrag.mode === 'resize-l') {
+    const sp = curScan.spans[tlDrag.idx];
+    sp.start = Math.max(0, Math.min(t, sp.end - 0.5));
+    tlApplyBlock(tlDrag.idx);
+  } else if (tlDrag.mode === 'resize-r') {
+    const sp = curScan.spans[tlDrag.idx];
+    sp.end = Math.min(window.tlTotal, Math.max(t, sp.start + 0.5));
+    tlApplyBlock(tlDrag.idx);
+  }
+}
+function tlPointerUp(e) {
+  window.removeEventListener('pointermove', tlPointerMove);
+  window.removeEventListener('pointerup', tlPointerUp);
+  if (!tlDrag) return;
+  const d = tlDrag; tlDrag = null;
+  if (d.mode === 'create') {
+    const g = $('tl-ghost'); if (g) g.remove();
+    let a = Math.min(d.t0, d.cur), b = Math.max(d.t0, d.cur);
+    if (b - a < 0.5) { undoStack.pop(); return }  // 视为误触
+    a = Math.round(a * 10) / 10; b = Math.round(b * 10) / 10;
+    curScan.spans.push({start: a, end: b, samples: 0, max_box_ratio: 0, thumb: '', manual: true});
+    mergeSpans();
+    renderScan();
+  } else if (d.mode === 'click') {
+    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 5) toggleSpan(d.idx);
+  } else {
+    const sp = curScan.spans[d.idx];
+    sp.start = Math.round(sp.start * 10) / 10; sp.end = Math.round(sp.end * 10) / 10;
+    mergeSpans();
+    renderScan();
+  }
+}
+function tlApplyBlock(i) {
+  const sp = curScan.spans[i], b = window.tlBlocks[i];
+  if (!sp || !b) return;
+  b.style.left = (sp.start / window.tlTotal * 100) + '%';
+  b.style.width = Math.max(0.2, (sp.end - sp.start) / window.tlTotal * 100) + '%';
+  b.title = fmtTs(sp.start) + '-' + fmtTs(sp.end) + ' · 单击选中/取消 · 双击跳预览 · 拖边缘微调';
+}
+function selectedSpans() {
+  return [...$('spans').querySelectorAll('.card')].filter(c => c.querySelector('input').checked)
+    .map(c => curScan.spans[+c.dataset.i]);
+}
+function refreshSelNote() {
+  const cards = [...$('spans').querySelectorAll('.card')];
+  const sel = [];
+  cards.forEach((c, i) => {
+    const cb = c.querySelector('input');
+    if (cb && cb.checked && curScan && curScan.spans[i]) sel.push({ i, sp: curScan.spans[i] });
+  });
+  sel.sort((a, b) => a.sp.start - b.sp.start);
+  const total = curScan ? (curScan.spans || []).length : 0;
+  $('sel-note').textContent = sel.length
+    ? '将修复 ' + sel.length + '/' + total + ' 段 · 合计 ' + sel.reduce((a, s) => a + (s.sp.end - s.sp.start), 0).toFixed(0) + 's（其余段落原样跳过）'
+    : (total ? '未选任何段——所有检出段落都将跳过' : '未选任何范围');
+  $('seg-submit').style.display = sel.length ? '' : 'none';
+  // 已选范围 chips（支持多段不连续；× = 从选择中移除该段）
+  const wrap = $('sel-chips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  sel.forEach(({ i, sp }) => {
+    const chip = document.createElement('span');
+    chip.className = 'sel-chip';
+    chip.innerHTML = (sp.manual ? '<i class="chip-tag">手动</i>' : '') +
+      fmtTs(sp.start) + '–' + fmtTs(sp.end) +
+      '<span class="dim">' + (Math.round((sp.end - sp.start) * 10) / 10) + 's</span>';
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'x'; x.textContent = '×'; x.title = '从选择中移除';
+    x.onclick = (ev) => {
+      ev.stopPropagation();
+      spansPush();
+      const cb = cards[i] && cards[i].querySelector('input');
+      if (cb) cb.checked = false;
+      syncTlSelection();
+      refreshSelNote();
+    };
+    chip.append(x);
+    wrap.append(chip);
+  });
+}
+async function startScan() { startScanFor($('scan-video').value) }
+async function startScanFor(path) {
+  if (!path) return;
+  // 同片已有排队/运行中的扫描：直接跟踪它，不重复提交（重复只会白排一个队）
+  try {
+    const d0 = await (await fetch(WEB + '/scans')).json();
+    const exist = (d0.scans || []).find(s => s.input === path && s.src_valid !== false && (s.state === 'queued' || s.state === 'running'));
+    if (exist) {
+      curScan = exist; undoStack = []; redoStack = [];
+      $('refilter-thr').value = curScan.threshold || 0.30; $('refilter-thr-val').textContent = $('refilter-thr').value;
+      renderScan();
+      $('scan-status').innerHTML += '<span class="dim">（已有同片扫描，未重复提交）</span>';
+      return;
+    }
+  } catch (e) {}
+  let d;
+  try {
+    const r = await fetch(WEB + '/scan', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({input: path, detection_model: 'rfdetr-v6-large'})});
+    d = await r.json();
+  } catch (e) {
+    $('scan-status').textContent = '扫描提交失败：' + e + '（检查网络后重试）';
+    return;
+  }
+  if (d.error) { $('scan-status').textContent = '扫描提交失败：' + d.error; return }
+  curScan = d; undoStack = []; redoStack = [];
+  $('refilter-thr').value = 0.30; $('refilter-thr-val').textContent = '0.30';
+  renderScan();
+}
+/* 入库预热（扫描前置）：素材入库后若 GPU 无任务占用且同片无扫描缓存，自动后台预扫一份 */
+/* 「自动处理」开关已移除（0.1.20 拆双链）：自动建任务只由后端 JASNA_AUTOCHAIN
+   一条链负责，开关收敛为后端环境变量 JASNA_AUTO_PROC（compose 里 off 即全停），
+   前端本地开关会给人"已关却仍在建任务"的假象。 */
+function afterIngest(name) {
+  // 状态机流程（v0.19）：入库只造暂存行；扫描统一由 stagedScanTick 发起
+  // （直调 maybeAutoScan 会与 tick 竞态双提交——同片出现 running+queued 双记录自己挡自己）
+  ensureStagedRow(name);
+}
+function ensureStagedRow(name) {
+  // 网盘导入等无上传行的入库路径：造一个暂存行承载扫描生命周期展示
+  if (uploadRows.some(r => r.name === name && r.state === 'ready')) return;
+  uploadRows.unshift({uid: 'staged-' + Date.now().toString(36) + '-' + name, name, size: 0, total: 0, received: 0, state: 'ready', base: WEB, channel: 'domain'});
+  saveUploadRows(); renderTasks();
+}
+function maybeAutoScan(name) {
+  fetch(WEB + '/jobs').then(r => r.json()).then(d => {
+    if ((d.jobs || []).some(j => j.state === 'running' || j.state === 'queued')) return;
+    return fetch(WEB + '/scans').then(r2 => r2.json()).then(d2 => {
+      const has = (d2.scans || []).some(s => s.input === '/videos/' + name && s.src_valid !== false &&
+        (s.state === 'done' || s.state === 'running' || s.state === 'queued'));
+      if (has) return;
+      fetch(WEB + '/scan', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({input: '/videos/' + name, detection_model: 'rfdetr-v6-large'})});
+    });
+  }).catch(() => {});
+}
+let segReturn = null;   // 非空 = 从加工弹窗/抽屉跳转而来 {path}；应用后回填该弹窗
+let segOriginTab = 'tasks';   // overlay 打开前的 tab，关闭时恢复
+function segOverlayOpen() { return document.getElementById('tab-segments').classList.contains('seg-overlay') }
+function closeSegOverlay() {
+  document.getElementById('tab-segments').classList.remove('seg-overlay');
+  tab(segOriginTab || 'tasks');
+}
+function openSegTab(video) {
+  if (video) $('scan-video').value = video;
+  // 全屏 overlay（不再是导航 tab）：记住来处，关闭时恢复
+  const active = document.querySelector('nav.top button.active, .tabbar button.active');
+  segOriginTab = (active && active.dataset.tab) || 'tasks';
+  document.getElementById('tab-segments').classList.add('seg-overlay');
+  const target = $('scan-video').value || video;
+  if (!target) { $('scan-status').textContent = '先在上方选择视频，或从素材库/任务进入'; return }
+  fetch(WEB + '/scans').then(r2 => r2.json()).then(d => {
+    if (curScan && (curScan.state === 'queued' || curScan.state === 'running') && curScan.input === target) return; // 本片扫描进行中不覆盖
+    const list = (d.scans || []).filter(x => x.input === target && x.src_valid !== false);
+    lastScanList = d.scans || [];
+    const doneList = list.filter(s => s.state === 'done' && (s.spans || []).length);
+    const actList = list.filter(s => s.state === 'running' || s.state === 'queued');
+    if (doneList.length) {
+      curScan = doneList[0];   // 缓存优先：直接复用最新完成的扫描
+      $('refilter-thr').value = curScan.threshold || 0.30;
+      $('refilter-thr-val').textContent = $('refilter-thr').value;
+      undoStack = []; redoStack = [];
+      renderScan();
+    } else if (actList.length) {
+      curScan = actList[0];    // 没有成品缓存但有在跑的：跟踪进度
+      $('refilter-thr').value = curScan.threshold || 0.30;
+      $('refilter-thr-val').textContent = $('refilter-thr').value;
+      undoStack = []; redoStack = [];
+      renderScan();
+    } else if (!curScan || curScan.input !== target) {
+      startScanFor(target);    // 扫描前置：无任何缓存时自动开扫，不用手点
+    }
+  }).catch(() => {});
+}
+/* 应用粒度：按片段（勾选段逐段修，空隙直通，快）/ 按整段范围（勾选段并成覆盖区间整段处理） */
+let applyMode = localStorage.getItem('jasna_apply_mode') || 'spans';
+function setApplyMode(m) {
+  applyMode = m;
+  localStorage.setItem('jasna_apply_mode', m);
+  document.querySelectorAll('#apply-mode-seg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+}
+function applySegments() {
+  const sel = selectedSpans();
+  if (!sel.length || !curScan) return;
+  let segs;
+  if (applyMode === 'range') {
+    const arr = sel.slice().sort((a, b) => a.start - b.start);
+    const blocks = [];
+    arr.forEach(s => {
+      const last = blocks[blocks.length - 1];
+      if (last && s.start <= last[1] + 0.5) last[1] = Math.max(last[1], s.end);
+      else blocks.push([s.start, s.end]);
+    });
+    segs = blocks.map(b => Math.round(b[0]) + '-' + Math.round(b[1])).join(',');
+  } else {
+    segs = sel.map(s2 => Math.round(s2.start) + '-' + Math.round(s2.end)).join(',');
+  }
+  if (segReturn) {
+    // 从加工弹窗跳来的：回填范围并弹窗恢复（字段保持原样不重置）
+    setSegPick(segs);
+    $('m-seg-suggest').textContent = '';
+    closeSegOverlay();
+    $('modal').classList.add('show');
+    segReturn = null;
+  } else {
+    closeSegOverlay();
+    const path = $('scan-video').value;
+    if (path) { openModal({path, name: path.split('/').pop()}); setSegPick(segs) }
+  }
+}
+/* 按检出细分：把勾选的手动粗范围替换为其内部检出的片段（= 只修选中区域识别出来的片段）。
+   检出段本来就是独立块（同类型才合并），所以这里只需：勾选范围内命中的检出段 + 移除粗范围。 */
+function refineByDetection() {
+  if (!curScan) return;
+  const cards = [...$('spans').querySelectorAll('.card')];
+  const checkedManual = [];
+  cards.forEach((c, i) => {
+    const cb = c.querySelector('input');
+    if (cb && cb.checked && curScan.spans[i] && curScan.spans[i].manual) checkedManual.push(curScan.spans[i]);
+  });
+  if (!checkedManual.length) { $('sel-note').textContent = '没有勾选的手动范围可细分（只有检出的段无需细分）'; setTimeout(refreshSelNote, 4000); return }
+  spansPush();
+  let hitSpans = 0, miss = 0;
+  const consumed = new Set();
+  checkedManual.forEach(m => {
+    let hit = false;
+    curScan.spans.forEach(d2 => {
+      if (!d2.manual && Math.min(m.end, d2.end) - Math.max(m.start, d2.start) > 0.5) { hit = true; hitSpans++ }
+    });
+    if (hit) { consumed.add(m) } else { miss++ }
+  });
+  curScan.spans = curScan.spans.filter(s => !consumed.has(s));
+  mergeSpans();
+  renderScan();
+  const cards2 = [...$('spans').querySelectorAll('.card')];
+  curScan.spans.forEach((s, i) => {
+    if (s.manual) { const cb = cards2[i] && cards2[i].querySelector('input'); if (cb) cb.checked = false }
+  });
+  syncTlSelection();
+  refreshSelNote();
+  $('sel-note').textContent = '已按检出细分：命中 ' + hitSpans + ' 个检出片段并已勾选' + (miss > 0 ? '；' + miss + ' 个范围未检出片段已保留' : '') + '，粗范围已移除';
+  setTimeout(refreshSelNote, 5000);
+}
+function describeSegs(segs) {
+  const parts = segs.split(',').map(x => x.split('-').map(Number));
+  const total = parts.reduce((a, p2) => a + (p2[1] - p2[0]), 0);
+  return parts.length + ' 段 · 共 ' + Math.round(total) + 's（' + segs + '）';
+}
+function setSegPick(segs) {
+  $('m-seg').value = segs;
+  $('m-seg-summary').value = describeSegs(segs);
+  $('m-seg-clear').style.display = '';
+  $('m-fmp4').disabled = true; $('m-fmp4').checked = false;
+}
+function clearSegPick() {
+  $('m-seg').value = ''; $('m-seg-summary').value = '';
+  $('m-seg-clear').style.display = 'none';
+  $('m-fmp4').disabled = false;
+}
+function openSegPickerFromModal() {
+  const input = $('m-input').value;
+  if (!input) return;
+  segReturn = { path: input };
+  closeModal();
+  openSegTab(input);
+}
+let segSuggestList = [];
+function segSuggest(input) {
+  const el = $('m-seg-suggest');
+  if (!el) return;
+  el.innerHTML = '';
+  fetch(WEB + '/scans').then(r2 => r2.json()).then(d => {
+    const list = (d.scans || []).filter(x => x.input === input && x.src_valid !== false && (x.spans || []).length);
+    segSuggestList = list;
+    if (!list.length) {
+      el.innerHTML = '<span style="opacity:.65">只修部分时段可大幅提速 · <a href="javascript:void(0)" style="color:var(--acc)" onclick="openSegPickerFromModal()">扫描并选择范围</a></span>';
+      return;
+    }
+    const sc = list[0];
+    const total = sc.spans.reduce((a, s2) => a + (s2.end - s2.start), 0);
+    const pct = sc.duration ? Math.round(total / sc.duration * 100) : null;
+    const ago = fmtDur(Math.max(60, Date.now() / 1000 - sc.created_at));
+    el.innerHTML = '<span class="dim">已有扫描（' + ago + '前 · ' + sc.detection_model + '）：' + sc.spans.length +
+      ' 段共 ' + Math.round(total) + 's' + (pct != null ? '，占全片 ' + pct + '%' : '') + ' · </span>' +
+      '<button class="btn mini" onclick="useScannedSegments()">使用扫描结果</button> ' +
+      '<a href="javascript:void(0)" class="dim" style="color:var(--acc)" onclick="openSegPickerFromModal()">段编辑</a>';
+  }).catch(() => {});
+}
+function useScannedSegments() {
+  const sc = segSuggestList[0];
+  if (!sc) return;
+  setSegPick(sc.spans.map(s2 => Math.round(s2.start) + '-' + Math.round(s2.end)).join(','));
+}
+function openSegPickerJob(id) {
+  const j = jobList.find(x => x.id === id);
+  if (!j) return;
+  segReturn = { path: j.input };
+  closeDrawer();
+  openSegTab(j.input);
+}
+function fillScanSelect(videos) {
+  const s = $('scan-video'); s.innerHTML = '';
+  videos.forEach(v => { const o = document.createElement('option'); o.value = v.path; o.textContent = v.name; s.append(o) });
+}
+
+/* ===== 懒猫网盘（平台通道，0.1.22 去桥）=====
+ * 旧网盘桥（盒子宿主 systemd 服务 + 硬编码 IP）已退役，全部走平台能力：
+ *   导入 = 官方 file-pickers 组件选文件 → WebDAV 流式拉到 OPFS 落盘 → File 进分片上传
+ *          （GB 级零内存峰值；上传入口的注入拦截「本地/懒猫」二选一保留作兜底，中小文件可直接走）
+ *   导出 = 成品流式 fetch → WebDAV PUT 直写网盘（duplex half 流式，不经内存整体缓冲）
+ * 目录/文件选择用应用内 <lzc-file-picker>（官方 UMD 懒加载），不依赖注入生效。
+ */
+const DRIVE_WEBDAV = '/_lzc/files/home';
+let pickersLoading = null;
+function ensurePickers() {
+  if (window.customElements && customElements.get('lzc-file-picker')) return Promise.resolve();
+  if (!pickersLoading) pickersLoading = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = '/lzc-file-pickers.umd.js';
+    s.onload = () => res();
+    s.onerror = () => { pickersLoading = null; rej(new Error('网盘组件加载失败')) };
+    document.head.appendChild(s);
+  });
+  return pickersLoading;
+}
+/* submit 载荷三层连拆：Vue 多参数数组 → JSON 字符串 → postMessage 包装（canonical 规则） */
+function normalizePicked(detail) {
+  let v = detail;
+  for (let i = 0; i < 3; i++) {
+    if (typeof v === 'string') { try { v = JSON.parse(v) } catch (e) { return [] } continue }
+    if (Array.isArray(v) && v.length && typeof v[0] === 'string') { v = v[0]; continue }
+    if (v && typeof v === 'object' && !Array.isArray(v) && 'fileList' in v) { v = v.fileList; continue }
+    break;
+  }
+  return Array.isArray(v) ? v : [];
+}
+/* 打开网盘选择器。opts.dir=true 选目录（保存）；否则多选文件（导入）。取消 reject(AbortError) */
+function openDrivePicker(opts) {
+  return ensurePickers().then(() => new Promise((resolve, reject) => {
+    const el = document.createElement('lzc-file-picker');
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483647';
+    el.setAttribute('is-modal', 'true');
+    el.setAttribute('theme', 'dark');
+    if (opts.dir) {
+      el.setAttribute('type', 'directory'); el.setAttribute('choice-dir-only', 'true');
+      el.setAttribute('title', '保存到懒猫网盘'); el.setAttribute('confirm-button-title', '保存到这里');
+    } else {
+      el.setAttribute('type', 'file'); el.setAttribute('choice-file-only', 'true'); el.setAttribute('multiple', 'true');
+      el.setAttribute('accept', 'video/*'); el.setAttribute('title', '从懒猫网盘打开'); el.setAttribute('confirm-button-title', '导入');
+    }
+    let done = false;
+    const onMsg = ev => { if (ev.data && ev.data.type === 'submit') { done = true; cleanup(); resolve(normalizePicked(ev.data)) } };
+    const onSubmit = ev => { done = true; cleanup(); resolve(normalizePicked(ev.detail)) };
+    const cleanup = () => { window.removeEventListener('message', onMsg); el.remove() };
+    el.addEventListener('submit', onSubmit);
+    el.addEventListener('close', () => { window.removeEventListener('message', onMsg); el.remove(); if (!done) reject(Object.assign(new Error('cancel'), { name: 'AbortError' })) });
+    window.addEventListener('message', onMsg);
+    document.body.appendChild(el);
+  }));
+}
+/* 网盘相对路径规范化：安全重复解码 → 剥域名/WebDAV 前缀 → 拒绝 .. 段（canonical 规则） */
+function driveRelPath(raw) {
+  if (!raw) return '';
+  let v = String(raw);
+  for (let i = 0; i < 3; i++) { try { const n = decodeURI(v); if (n === v) break; v = n } catch (e) { break } }
+  v = v.replace(/^https?:\/\/[^/]+/i, '');
+  const prefix = DRIVE_WEBDAV + '/';
+  if (v.startsWith(prefix)) v = v.slice(prefix.length);
+  v = v.replace(/^\/+/, '');
+  if (v.split('/').some(seg => seg === '..')) throw new Error('路径不合法');
+  return v;
+}
+function encDrivePath(p) { return p.split('/').filter(Boolean).map(encodeURIComponent).join('/') }
+/* 轻提示（右下角，可带进度），替代旧桥的 alert 轰炸 */
+function driveToast(text, ms) {
+  let t = document.getElementById('drive-toast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'drive-toast';
+    t.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483646;max-width:440px;background:#161b22;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+    document.body.appendChild(t);
+  }
+  t.innerHTML = text;
+  clearTimeout(t._tm);
+  if (ms) t._tm = setTimeout(() => t.remove(), ms);
+  return t;
+}
+/* 从网盘导入：逐文件 WebDAV 流式 → OPFS 落盘 → File 进现有分片上传（GB 级零内存峰值） */
+async function importDriveFiles(items) {
+  if (!items || !items.length) return;
+  if (!navigator.storage || !navigator.storage.getDirectory) { alert('当前浏览器不支持 OPFS 流式导入，请改用本地上传'); return }
+  const files = [], handles = [];
+  for (const it of items) {
+    let base;
+    try {
+      const rel = driveRelPath(it.filename || it.basename);
+      base = rel.split('/').pop();
+      if (!base) throw new Error('路径不合法');
+    } catch (e) { driveToast('✗ 路径不合法：' + escH(it.filename || it.basename || ''), 5000); continue }
+    const toast = driveToast('⇣ 网盘导入 ' + escH(base) + ' …');
+    try {
+      const root = await navigator.storage.getDirectory();
+      const fh = await root.getFileHandle(base, { create: true });
+      const w = await fh.createWritable();
+      const resp = await fetch(DRIVE_WEBDAV + '/' + encDrivePath(it.filename ? driveRelPath(it.filename) : it.basename), { credentials: 'include' });
+      if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status + '（网盘会话可能过期，刷新页面重试）');
+      const reader = resp.body.getReader();
+      let got = 0;
+      for (;;) {
+        const rd = await reader.read();
+        if (rd.done) break;
+        await w.write(rd.value); got += rd.value.byteLength;
+        toast.innerHTML = '⇣ 网盘导入 ' + escH(base) + ' … ' + (got / 1048576).toFixed(0) + 'MB';
+      }
+      await w.close();
+      const file = await fh.getFile();
+      if (file.size === 0) throw new Error('读回为空（网盘会话可能过期，刷新页面重试）');
+      files.push(file); handles.push(fh);
+      toast.innerHTML = '✓ 已导入 ' + escH(base) + '（' + fmtSize(file.size / 1048576) + '），加入上传队列';
+      toast._tm = setTimeout(() => toast.remove(), 4000);
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast.innerHTML = '✗ 导入失败 ' + escH(base) + '：' + escH(e.message || e);
+      toast._tm = setTimeout(() => toast.remove(), 6000);
+    }
+  }
+  if (files.length) { startUploads(files, handles); tab('tasks') }
+}
+async function driveImportUI() {   // 素材库「从懒猫网盘导入」入口：平台 picker 多选
+  try {
+    const items = await openDrivePicker({ dir: false });
+    importDriveFiles(items);
+  } catch (e) { /* 用户取消，静默 */ }
+}
+/* 存网盘：平台 picker 选目录 → 成品流式 PUT 直写（duplex half，带进度，不经内存整体缓冲） */
+async function driveSave(name) {
+  let picks;
+  try { picks = await openDrivePicker({ dir: true }) } catch (e) { return }   // 取消静默
+  if (!picks || !picks.length) return;
+  let dir = '';
+  try { dir = driveRelPath(picks[0].filename || picks[0].basename) } catch (e) { alert('目录路径不合法'); return }
+  localStorage.setItem('jasna_savedir', dir);
+  const dest = (dir ? dir + '/' : '') + name;
+  const toast = driveToast('⇧ 存网盘 ' + escH(dest) + ' …');
+  try {
+    const src = UP('/outputs/' + encodeURIComponent(name)) + '?dl=1';
+    const resp = await fetch(src);
+    if (!resp.ok || !resp.body) throw new Error('读取成品失败 HTTP ' + resp.status);
+    const total = +(resp.headers.get('content-length') || 0);
+    const reader = resp.body.getReader();
+    let sent = 0;
+    const stream = new ReadableStream({
+      async pull(ctrl) {
+        const rd = await reader.read();
+        if (rd.done) { ctrl.close(); return }
+        sent += rd.value.byteLength;
+        toast.innerHTML = '⇧ 存网盘 ' + escH(dest) + ' … ' + (total ? (sent / total * 100).toFixed(0) + '%' : (sent / 1048576).toFixed(0) + 'MB');
+        ctrl.enqueue(rd.value);
+      }
+    });
+    const put = await fetch(DRIVE_WEBDAV + '/' + encDrivePath(dest), { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: stream, duplex: 'half', credentials: 'include' });
+    if (!put.ok) throw new Error('写入网盘失败 HTTP ' + put.status);
+    toast.innerHTML = '✓ 已存到网盘：' + escH(dest) + (total ? '（' + fmtSize(total / 1048576) + '）' : '');
+    toast._tm = setTimeout(() => toast.remove(), 5000);
+  } catch (e) {
+    toast.innerHTML = '✗ 存网盘失败：' + escH(e.message || e);
+    toast._tm = setTimeout(() => toast.remove(), 6000);
+  }
+}
+/* file_handler 入口：网盘「打开方式」→ 走同一条流式导入链（显式意图，直进导入不弹二选一） */
+async function openFromDriveParam() {
+  const fp = new URLSearchParams(location.search).get('file');
+  if (!fp) return;
+  history.replaceState(null, '', location.pathname);   // 防刷新重复触发
+  try { await importDriveFiles([{ filename: fp }]) } catch (e) { driveToast('从网盘打开失败：' + escH(e.message || e), 6000) }
+}
+
+/* ===== 首次启动使用演示（空态自动弹；页头 ? 重开；一键走真实全链，零 mock） =====
+ * 链路：fetch 内置演示片 → startUploads（既有分片引擎）→ autochain 入库→扫描；
+ * 扫描 done 后演示器**强制发全片任务**（上游 smart-render 对长 GOP hevc 短片的
+ * span 任务会截断输出，见 demoRunFullJob 注释），完成后清理 span 产物。
+ * 素材 test_clip1_1080p.mp4（10s/1.2MB/1080p）随包内置。 */
+const DEMO_NAME = 'test_clip1_1080p.mp4';
+let demoWatchTimer = null, demoDoneTimer = null, demoFullJobId = null, demoJobStarted = false;
+function welcomeEligible() {
+  return !localStorage.getItem('jasna_welcomed')
+    && videosLoaded && videoList.length === 0 && jobList.length === 0
+    && !uploadRows.some(r => r.state === 'uploading' || r.state === 'waiting');
+}
+function openWelcome(force) {
+  if (!force && !welcomeEligible()) return;
+  localStorage.setItem('jasna_welcomed', '1');
+  $('welcomemodal').classList.add('show');
+}
+function closeWelcome() { $('welcomemodal').classList.remove('show') }
+async function welcomeRunDemo() {
+  const btn = $('wc-go');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = '准备演示素材…';
+  let file;
+  try {
+    const r = await fetch('/demo/' + DEMO_NAME);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    file = new File([await r.blob()], DEMO_NAME, { type: 'video/mp4' });
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '▶ 一键体验（10 秒演示片）';
+    alert('演示素材加载失败（' + (e.message || e) + '），请点「我自己上传」走正常上传。');
+    return;
+  }
+  btn.textContent = '已加入上传队列';
+  closeWelcome(); tab('tasks');
+  startUploads([file]);
+  driveToast('演示开始：上传 → 自动扫描 → 自动修复。引擎首编约 15-60 分钟（仅首次），进度见任务日志。', 8000);
+  demoWatch();
+}
+function demoWatch() {   // 轮询扫描状态；done 后转全片任务（不再依赖 autochain 的 span 任务）
+  clearInterval(demoWatchTimer);
+  let tries = 0, busy = false;   // async tick 会重叠（fetch 慢时下一轮已入场），占位必须同步置位
+  demoWatchTimer = setInterval(async () => {
+    if (++tries > 150 || busy) return;   // 5 分钟无扫描结果即放弃（交给人工/后续轮询）
+    busy = true;
+    try {
+      const d = await (await fetch(WEB + '/scans')).json();
+      const sc = (d.scans || []).find(s => s.input === '/videos/' + DEMO_NAME && s.src_valid !== false);
+      if (!sc || sc.state !== 'done') return;   // queued/running 继续等
+      clearInterval(demoWatchTimer);
+      driveToast('扫描完成，检出 ' + (sc.spans || []).length + ' 处马赛克——演示走全片修复，成品完整可用', 6000);
+      demoRunFullJob();
+    } catch (e) { /* 下一轮重试 */ }
+    finally { busy = false; }
+  }, 2000);
+}
+/* 演示强制全片：autochain 会按扫描段自动建 span 任务，但上游 smart-render 对
+   长 GOP hevc 短片的 span 任务会截断输出（2026-09-09 实测 "0-10" 只出 50/300 帧，
+   见 verify/0.1.29/result.md）。全片任务无此问题（300 帧全渲染）。
+   做法：发全片任务 → 完成后删除 span 任务的记录与截断成品，只保留全片成品。 */
+async function demoRunFullJob() {
+  if (demoFullJobId || demoJobStarted) return;   // 守卫必须同步置位：demoWatch 重叠 tick 会并发进来（实测双任务 2026-09-10）
+  demoJobStarted = true;
+  try {
+    const r = await fetch(WEB + '/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: '/videos/' + DEMO_NAME, conflict: 'auto' }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.error) { driveToast('✗ 演示建任务失败：' + escH(d.error), 6000); return }
+    demoFullJobId = d.id;
+    driveToast('▶ 演示全片修复已排队（约 20-40 秒）', 6000);
+    pollJobs();
+    demoDoneWatch();
+  } catch (e) { driveToast('✗ 演示建任务失败：' + escH(e.message || e), 6000) }
+}
+function demoDoneWatch() {   // 全片任务收尾：清理 autochain span 任务的记录与截断成品
+  clearInterval(demoDoneTimer);
+  let tries = 0, busy = false;   // 同 demoWatch：防重叠 tick 双跑清理循环
+  demoDoneTimer = setInterval(async () => {
+    if (++tries > 120 || busy) return;
+    busy = true;
+    try {
+      const d = await (await fetch(WEB + '/jobs')).json();
+      const mine = (d.jobs || []).find(x => x.id === demoFullJobId);
+      if (!mine || mine.state === 'queued' || mine.state === 'running') return;
+      clearInterval(demoDoneTimer);
+      for (const other of (d.jobs || [])) {
+        if (other.id === demoFullJobId || (other.input || '') !== '/videos/' + DEMO_NAME) continue;
+        try { await fetch(WEB + '/jobs/' + other.id, { method: 'DELETE' }) } catch (e) {}
+        const on = (other.output || '').split('/').pop();
+        if (on) try { await fetch(WEB + '/outputs/' + encodeURIComponent(on), { method: 'DELETE' }) } catch (e) {}
+      }
+      pollJobs(); loadOutputs();
+      if (mine.state === 'done') driveToast('✓ 演示完成！成品已入库——点「对比预览」查看修复效果，或「保存到懒猫网盘」。', 10000);
+      else driveToast('✗ 演示任务未完成：' + escH(mine.state), 8000);
+    } catch (e) { /* 下一轮重试 */ }
+    finally { busy = false; }
+  }, 2000);
+}
+
+/* ===== system_stats 底栏 ===== */
+function statsInit() {
+  $('statsbar').innerHTML = gaugeCell('CPU') + gaugeCell('GPU') + gaugeCell('RAM') + gaugeCell('显存');
+}
+function gaugeCell(label) {
+  return '<div class="gauge"><span class="gl">' + label + '</span><div class="gb"><div></div></div>' +
+    '<span class="dim gv" style="min-width:70px;text-align:right">—</span></div>';
+}
+function setGauge(i, pct, text) {
+  const g = document.querySelectorAll('#statsbar .gauge')[i];
+  if (!g) return;
+  const bar = g.querySelector('.gb>div');
+  bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  bar.className = pct >= 85 ? 'err' : pct >= 60 ? 'warn' : '';
+  g.querySelector('.gv').textContent = text;
+}
+/* ===== 系统监控默认收起（专家信息不占主流程视线；header 📊 开关，偏好记忆） ===== */
+function statsVisible() { return localStorage.getItem('jasna_stats') === 'on' }
+function applyStatsVis() {
+  const bar = $('statsbar');
+  if (bar) bar.style.display = statsVisible() ? '' : 'none';
+  const b = $('stats-btn');
+  if (b) b.style.opacity = statsVisible() ? '' : '.5';
+}
+function toggleStats() { localStorage.setItem('jasna_stats', statsVisible() ? 'off' : 'on'); applyStatsVis(); pollStats() }
+async function pollStats() {
+  try {
+    const d = await (await fetch(UP('/stats'))).json();
+    if (!$('statsbar').querySelector('.gauge')) statsInit();
+    if (d.cpu_pct != null) setGauge(0, d.cpu_pct, d.cpu_pct.toFixed(0) + '%');
+    if (d.gpu_pct != null) setGauge(1, d.gpu_pct, d.gpu_pct + '%');
+    if (d.ram) setGauge(2, d.ram.used_gb / d.ram.total_gb * 100, d.ram.used_gb + '/' + d.ram.total_gb + 'G');
+    if (d.vram) setGauge(3, d.vram.used_gb / d.vram.total_gb * 100, d.vram.used_gb + '/' + d.vram.total_gb + 'G');
+    /* M2.2：新装机引擎未编译 → 任务区挂首编提示（编译中/完成后由下次轮询自动清除） */
+    const eb = $('engine-hint'); if (eb) eb.remove();
+    if (d.engines_compiled === false) {
+      const el = document.createElement('div'); el.id = 'engine-hint';
+      el.className = 'card dim'; el.style.margin = '0 0 8px';
+      el.textContent = '⚙ 首次使用：引擎尚未编译——第一个任务会先编译 TensorRT 引擎（约 15-60 分钟，进度见任务日志），编译一次后永久生效';
+      $('tab-tasks').prepend(el);
+    }
+  } catch {
+    if (!$('statsbar').querySelector('.gauge')) $('statsbar').textContent = '系统状态不可达';
+  }
+}
+async function pollState() {
+  try { await fetch(WEB + '/models');
+    const st = $('state'); st.dataset.base = '1'; st.className = 'on';
+    renderChannel();
+  } catch { const st = $('state'); st.textContent = '服务不可达'; st.className = ''; st.dataset.base = '' }
+}
+
+(function init() {
+  statsInit();
+  applyStatsVis();
+  setApplyMode(applyMode);
+  renderRemind();
+  $('timeline').addEventListener('pointerdown', tlContainerDown);
+  renderChannel();
+  pollState(); setInterval(pollState, 10000);
+  pollStats(); setInterval(pollStats, 8000);
+  presetFill();
+  (async () => { try { models = await (await fetch(WEB + '/models')).json() } catch {} })();
+  pollJobs(); loadVideos(); loadMediaMeta().then(loadOutputs);
+  openFromDriveParam();   // file_handler：网盘「打开方式」带 ?file= 进来时流式导入
+  (async () => {          // 首启欢迎层：等 videos 首轮加载完成后判空态（videoList/jobs 双空才弹）
+    for (let i = 0; i < 24 && !videosLoaded; i++) await new Promise(r => setTimeout(r, 250));
+    openWelcome(false);
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+# Jasna on AIPod x3（AGX Orin 64G，L4T 36.5 / JetPack 6.1，sm_87）
+# 基座 = lada-restore-api 同平台已验证镜像（voxcpm-fastapi 基座 + jetson-ai-lab
+# jp6/cu126：torch 2.8 系 / torch-tensorrt 2.8.0 / TRT 10.3 bind / python 3.10）。
+# 与 GB10 的 Dockerfile.jasna 同一"基座+差异依赖"血统。
+#
+# 依赖差异（相对 lada-restore-api 基座）：
+#   1. ffmpeg8：上游启动硬检查 major==8；基座的静态 9.0 / 发行版 4.4 都不行。
+#      tarball 随构建上下文带入（避免设备直连 GitHub；URL 与 GB10 相同：
+#      BtbN FFmpeg-Builds n8.1 linuxarm64 gpl）。其 nvenc 编码器在 L4T 不可用，
+#      硬编码走 gst nvv4l2 lane（补丁#9，待做），ffmpeg8 只作 CLI。
+#   2. av 保持基座 17.0.0 —— av 18.x 全系 requires-python>=3.11，JP6 无 cp311
+#      生态；配 jasna-patches/add_av17_compat.py（Colorspace shim）。
+#   3. jasna CLI 小依赖：psutil / cryptography / huggingface-hub / einops /
+#      safetensors / scipy。GUI 包（customtkinter/tkinterdnd2）与 SD1.5
+#      （diffusers/accelerate）、python_vali 不装——GB10 容器实测亦未安装
+#      （lada-jasna-1 pip list，2026-09-04）。
+#
+# 源码与权重不进镜像：宿主 bind mount（同 GB10 模式，apply.sh 即部署）。
+# 构建（x3 上）：sudo docker build -t jasna-orin:0.1.0 .
+FROM lada-restore-api:merge-20260902
+
+COPY ffmpeg-n8.1-linuxarm64.tar.xz /tmp/ff8.tar.xz
+RUN mkdir -p /opt/ff8 \
+    && tar xJf /tmp/ff8.tar.xz -C /opt/ff8 --strip-components=1 \
+    && rm /tmp/ff8.tar.xz \
+    && /opt/ff8/bin/ffmpeg -version | head -1
+
+RUN pip install --no-cache-dir \
+        psutil \
+        "cryptography>=42" \
+        huggingface-hub \
+        einops \
+        safetensors \
+        scipy
+
+ENV PATH=/opt/ff8/bin:${PATH}
+# 入口由 compose / docker run 指定；PYTHONPATH=/jasna 运行时注入（bind mount 源码）。

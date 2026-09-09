@@ -1,0 +1,5 @@
+# AI Pod 专属设置（只放 AIPod 侧配置；普通应用元数据在 lzc-manifest.yml）
+shortcut:
+  disable: false
+depends_on_hosts:
+  - jasna-ai

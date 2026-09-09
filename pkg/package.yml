@@ -1,0 +1,23 @@
+package: cloud.lazycat.aipod.jasna
+version: 0.1.31
+name: Jasna 修复工作台
+description: 视频修复工作台（AIPod 算力舱版）：上传→扫描→修复→成品库，TRT 推理 + NVDEC/NVENC 硬解硬编
+# 与 Spark 版 cloud.lazycat.app.jasna-spark 并存（用户 2026-09-04 定案）
+# 0.1.22 送审元数据补齐：license 与上游 LICENSE（AGPL-3.0）一致；移植来源必填
+license: AGPL-3.0
+source: https://github.com/vito01111/jasna-aipod
+source_author: vito01111
+permissions:
+  required: [net.internet]
+  optional: [media.read, media.write]
+# 移动端三态收口（送审硬门禁）：桌面工作台，声明不支持移动端；后续版本可翻案
+unsupported_platforms: [android, ios]
+locales:
+  zh-CN:
+    name: Jasna 修复工作台
+    description: 视频修复工作台（算力舱版）：上传→扫描→修复→成品库，TRT 推理 + 硬解硬编
+    usage: 需配合懒猫 AI 算力舱使用；处理本地或懒猫网盘中的视频文件，大文件修复耗时较长；首次使用会编译 TensorRT 引擎（约 15-60 分钟，编译一次永久生效）
+  en-US:
+    name: Jasna Restore Workbench
+    description: 'Video restore workbench (AI Pod edition) — upload, scan, restore, output library. TRT inference with NVDEC/NVENC hardware codecs.'
+    usage: 'Requires a LazyCat AI Pod. Processes video files from local disk or LazyCat Drive; large files take time. First run compiles TensorRT engines (about 15-60 min, once per device).'

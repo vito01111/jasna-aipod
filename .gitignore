@@ -1,0 +1,4 @@
+*.lpk
+__pycache__/
+*.pyc
+.build-context/

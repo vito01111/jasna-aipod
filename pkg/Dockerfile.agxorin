@@ -1,0 +1,55 @@
+# Jasna AIPod x3 商店镜像（自包含：源码+权重进镜像，引擎首启惰性编译）。
+# 基座 = lada Orin 同款（voxcpm-fastapi + jetson-ai-lab jp6/cu126 + py3.10），
+# 在 x3 上原生构建（QEMU 不适用：含宿主 bind 语义验证过的运行时，实机构建最稳）。
+#
+# 构建（x3 上，源码上下文 = 打好补丁的 jasna 树，见 ops-aipod/build_store.sh）：
+#   docker build -f Dockerfile.agxorin -t <你的镜像仓库>/jasna-aipod-agxorin:0.1.0 .
+FROM registry.lazycat.cloud/x/voxcpm-fastapi:b21c3c7
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good gstreamer1.0-tools patch python3-pip unzip v4l-utils \
+    && rm -rf /var/lib/apt/lists/*
+# （apt 的 ffmpeg 包仅为 gstreamer1.0-libav 依赖保留；CLI 侧 ffmpeg8 在 PATH 前置）
+
+ARG FFMPEG8_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linuxarm64-gpl-8.1.tar.xz
+COPY ffmpeg-n8.1-linuxarm64.tar.xz /tmp/ff8.tar.xz
+RUN mkdir -p /opt/ff8 \
+    && tar xJf /tmp/ff8.tar.xz -C /opt/ff8 --strip-components=1 \
+    && rm /tmp/ff8.tar.xz \
+    && /opt/ff8/bin/ffmpeg -version | head -1
+
+# TRT python 包仍走宿主 bind（compose 挂 /opt/jetson-python-dist）——JP6 的 TRT
+# 版本与宿主 L4T 强绑定，进镜像反而危险（lada 生产同款决策）。
+# 注意：voxcpm 基座无 pip 命令，必须 python3 -m pip（lada Dockerfile.api 同款）。
+# numpy 必须 1.26.4：JP6 torch 2.8 wheel 按 numpy 1.x 编译，pip 依赖解析会拉 2.x
+# 导致 "compiled using NumPy 1.x cannot be run" + torch 量化链导入崩（dev 镜像实测 1.26.4 正常）。
+# 前后各钉一次：开头防解析升版，结尾强制压回（部分包安装中会把 numpy 顶到 2.x）。
+RUN python3 -m pip install --no-cache-dir \
+        "numpy==1.26.4" \
+        "av==17.0.0" "opencv-python-headless==4.10.0.84" onnx \
+        psutil "cryptography>=42" huggingface-hub einops safetensors scipy \
+        "ultralytics-thop==2.0.18" wcwidth "yapf==0.43.0" "termcolor==3.3.0" \
+        dllist matplotlib polars \
+    && python3 -m pip install --no-cache-dir --no-deps \
+        "ultralytics==8.4.4" "mmengine==0.10.7" \
+    && python3 -m pip install --no-cache-dir --no-deps \
+        --extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
+        "torch-tensorrt==2.8.0" \
+    && python3 -m pip install --no-cache-dir --no-deps \
+        --index-url https://pypi.jetson-ai-lab.io/jp6/cu126 \
+        "torchvision==0.23.0" \
+    && python3 -m pip install --no-cache-dir --force-reinstall --no-deps "numpy==1.26.4"
+
+# 源码 + 权重（构建上下文的 jasna/ = apply.sh 已重放的整棵树；排除 *.engine——设备首编）
+COPY jasna /jasna
+
+# 引擎持久化（#6.1 根修）：权重种子搬离 model_weights——compose 把宿主数据目录挂到
+# /jasna/model_weights；首启为空时由启动命令从 seed 播种 onnx/pth，之后设备编译的
+# TRT 引擎全部落在宿主侧，重建容器/重装 LPK 不再丢（40 分钟重编）。
+RUN mv /jasna/model_weights /jasna/model_weights.seed
+
+ENV PATH=/opt/ff8/bin:${PATH} \
+    JASNA_HOME=/jasna
+WORKDIR /jasna

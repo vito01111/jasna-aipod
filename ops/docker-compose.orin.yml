@@ -1,0 +1,62 @@
+# Jasna 开发态 compose（AIPod x3，AGX Orin 64G / JP6.1）
+# 移植自 lada-restore 的 ai-pod-service/docker-compose.yml（同设备生产验证）。
+# 运行（x3 上）：sudo docker compose -f docker-compose.orin.yml up -d
+# 注意：x3 docker 默认 runtime 已是 nvidia（AIPod 托管注入），无需 runtime 行。
+services:
+  jasna:
+    image: jasna-orin:0.1.0
+    container_name: jasna-orin-1
+    restart: unless-stopped
+    command: >
+      sh -c "cd /jasna && (PYTHONPATH=/opt/jetson-python-dist:/jasna python3 jasna_web.py > /tmp/jasna-web.log 2>&1 &)
+      && PATH=/opt/ff8/bin:$$PATH PYTHONPATH=/opt/jetson-python-dist:/jasna JASNA_HOME=/jasna
+      exec python3 -m jasna --stream --no-browser --stream-port 8765
+      --detection-model rfdetr-v6-large"
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility   # video=注入 NVENC/NVDEC 驱动库
+      - PYTHONPATH=/opt/jetson-python-dist:/jasna          # 前者=TRT10.3 bind 挂载（勿覆盖基座），后者=源码
+      - DECODE_BACKEND=jetson-gst                          # 硬解 lane（scan 的 cv2 路径不受影响）
+      - JASNA_DEFAULT_BATCH_SIZE=2                         # x3 推荐档（基线：b2c45=33.8fps；payload 显式值优先）
+      - JASNA_DEFAULT_MAX_CLIP=45
+      - JASNA_VIDEOS_DIR=/videos
+      - JASNA_OUTPUTS_DIR=/outputs
+      - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib
+      - GST_PLUGIN_PATH=/opt/jetson-gstreamer:/usr/lib/aarch64-linux-gnu/gstreamer-1.0
+      - __EGL_VENDOR_LIBRARY_FILENAMES=/usr/lib/aarch64-linux-gnu/tegra-egl/nvidia.json
+    volumes:
+      - /home/nvidia/jasna:/jasna                    # 源码+权重（apply.sh 即部署）
+      - /home/nvidia/jasna-data/inputs:/videos
+      - /home/nvidia/jasna-data/outputs:/outputs
+      # ---- L4T BSP（照抄 lada 生产配方，2026-09-04 实机核对在位）----
+      - /usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/nvidia:ro
+      - /usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra:ro
+      - /usr/lib/aarch64-linux-gnu/tegra-egl:/usr/lib/aarch64-linux-gnu/tegra-egl:ro
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/opt/jetson-gstreamer:ro   # BSP nvv4l2* 插件
+      - /usr/lib/python3.10/dist-packages/tensorrt:/opt/jetson-python-dist/tensorrt:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_dispatch:/opt/jetson-python-dist/tensorrt_dispatch:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_lean:/opt/jetson-python-dist/tensorrt_lean:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt-10.3.0.dist-info:/opt/jetson-python-dist/tensorrt-10.3.0.dist-info:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_dispatch-10.3.0.dist-info:/opt/jetson-python-dist/tensorrt_dispatch-10.3.0.dist-info:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_lean-10.3.0.dist-info:/opt/jetson-python-dist/tensorrt_lean-10.3.0.dist-info:ro
+      # 注意：不挂 /usr/local/cuda*——voxcpm 基座镜像自带 CUDA12.6+TRT 库
+      # （libnvinfer.so.10 在镜像内 /usr/local/cuda-12.6/targets/aarch64-linux/lib/），
+      # host cuda bind 会把镜像库遮蔽（lada 生产 compose 同样不挂 cuda）。
+      - /usr/src/tensorrt:/usr/src/tensorrt:ro
+    devices:
+      # Tegra 设备节点（lada 生产清单；nvmap/nvsciipc 等按需补充）
+      - /dev/nvhost-gpu
+      - /dev/nvhost-as-gpu
+      - /dev/nvhost-ctrl-gpu
+      - /dev/nvhost-nvsched-gpu
+      - /dev/nvhost-tsg-gpu
+      - /dev/nvhost-ctxsw-gpu
+      - /dev/nvhost-dbg-gpu
+      - /dev/nvmap
+      - /dev/nvsciipc
+      - /dev/nvgpu
+      - /dev/media0
+      - /dev/v4l2-nvenc
+      - /dev/v4l2-nvdec
+    ports:
+      - "18765:8765"   # 流式 HLS
+      - "18766:8766"   # web 后端（与 Spark 端口口径一致，前端直连常量少改）

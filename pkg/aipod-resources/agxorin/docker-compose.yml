@@ -1,0 +1,92 @@
+# AIPod x3（AGX Orin 64G / JP6.1）生产 compose —— lzc-aipod-aiapp v2 资源布局
+# 由 AIPod runtime 按机型目录选择注入（nvidia runtime 平台自动注入，不写 runtime 行）。
+# 与 dev 版 ops-aipod/docker-compose.orin.yml 的差异：
+#   - 数据落 LZC_AGENT_DATA_DIR/CACHE_DIR（不用 /home/nvidia）
+#   - 源码+权重在镜像内（store 镜像自包含，见 Dockerfile.agxorin）；引擎首启惰性编译
+#   - healthcheck 对 /api/stats（不依赖引擎编译完成）
+#   - traefik label 暴露 jasna-ai host（与未来 thor/ 变体必须同 host）
+services:
+  jasna:
+    # 0.1.28：微烤镜像 = 0.1.26 + 首启预烤装配脚本 + 预烤引擎（l4tR36.5.2-trt10.3.0，267MB）。
+    # 新设备首启按环境指纹装配引擎，零编译开箱即用；指纹不匹配自动回落种子播种
+    # （首任务现场编译，= 旧行为）。脚本：ops/prebake_setup.py（详见文件头注释）。
+    image: ${JASNA_IMAGE:-<你的镜像仓库>/jasna-aipod-agxorin:0.1.31}
+    pull_policy: if_not_present
+    container_name: jasna-agxorin-1
+    restart: unless-stopped
+    labels:
+      - traefik.http.routers.jasna.rule=Host(`jasna-ai`)
+      # 显式 service port（v0.1.8）：容器 EXPOSE 3000（voxcpm 基座遗留）会让 traefik
+      # 自动选端到死端口 3000 → 域名 /wapi//api/ 全链 502（前端报"web 服务不可达"）
+      - traefik.http.routers.jasna.service=jasna-web
+      - traefik.http.services.jasna-web.loadbalancer.server.port=8766
+    # 引擎持久化（0.1.6）：model_weights 挂宿主数据目录；首启为空时从镜像内
+    # model_weights.seed 播种 onnx/pth，设备编译的引擎落宿主侧（重建容器不丢）。
+    # 升级权重需清空宿主目录重新播种。
+    command: >
+      sh -c "cd /jasna && python3 scripts/prebake_setup.py
+      && (PYTHONPATH=/opt/jetson-python-dist:/jasna python3 jasna_web.py > /tmp/jasna-web.log 2>&1 &)
+      && PATH=/opt/ff8/bin:$$PATH PYTHONPATH=/opt/jetson-python-dist:/jasna JASNA_HOME=/jasna
+      exec python3 -m jasna --stream --no-browser --stream-port 8765
+      --detection-model rfdetr-v6-large"
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      - PYTHONPATH=/opt/jetson-python-dist:/jasna
+      - DECODE_BACKEND=jetson-gst
+      # 0.1.22 去设备绑定：JASNA_LAN_HINT（硬编码算力舱 IP 的直连提示）已删——
+      # 商店版上传/下载/成品读取全走域名通道（/api/ /wapi/ → jasna-ai host）
+      - JASNA_DEFAULT_BATCH_SIZE=2
+      - JASNA_DEFAULT_CRF=26
+      - JASNA_DEFAULT_MAX_CLIP=45
+      - JASNA_VIDEOS_DIR=/videos
+      - JASNA_OUTPUTS_DIR=/outputs
+      - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib
+      - GST_PLUGIN_PATH=/opt/jetson-gstreamer:/usr/lib/aarch64-linux-gnu/gstreamer-1.0
+      - __EGL_VENDOR_LIBRARY_FILENAMES=/usr/lib/aarch64-linux-gnu/tegra-egl/nvidia.json
+    volumes:
+      - ${LZC_AGENT_DATA_DIR}/videos:/videos
+      - ${LZC_AGENT_DATA_DIR}/outputs:/outputs
+      - ${LZC_AGENT_DATA_DIR}/model_weights:/jasna/model_weights
+      - /usr/lib/aarch64-linux-gnu/nvidia:/usr/lib/aarch64-linux-gnu/nvidia:ro
+      - /usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra:ro
+      - /usr/lib/aarch64-linux-gnu/tegra-egl:/usr/lib/aarch64-linux-gnu/tegra-egl:ro
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/opt/jetson-gstreamer:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt:/opt/jetson-python-dist/tensorrt:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_dispatch:/opt/jetson-python-dist/tensorrt_dispatch:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_lean:/opt/jetson-python-dist/tensorrt_lean:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt-10.3.0.dist-info:/opt/jetson-python-dist/tensorrt-10.3.0.dist-info:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_dispatch-10.3.0.dist-info:/opt/jetson-python-dist/tensorrt_dispatch-10.3.0.dist-info:ro
+      - /usr/lib/python3.10/dist-packages/tensorrt_lean-10.3.0.dist-info:/opt/jetson-python-dist/tensorrt_lean-10.3.0.dist-info:ro
+      - /usr/src/tensorrt:/usr/src/tensorrt:ro
+      # 预烤指纹的宿主固件真值源（prebake_setup.py 读 L4T 版本；随宿主 OTA 漂移）
+      - /etc/nv_tegra_release:/etc/nv_tegra_release:ro
+    devices:
+      - /dev/nvhost-gpu
+      - /dev/nvhost-as-gpu
+      - /dev/nvhost-ctrl-gpu
+      - /dev/nvhost-nvsched-gpu
+      - /dev/nvhost-tsg-gpu
+      - /dev/nvhost-ctxsw-gpu
+      - /dev/nvhost-dbg-gpu
+      - /dev/nvmap
+      - /dev/nvsciipc
+      - /dev/nvgpu
+      - /dev/media0
+      - /dev/v4l2-nvenc
+      - /dev/v4l2-nvdec
+    ports:
+      - "127.0.0.1:19020:8766"   # 环回自检（宿主 curl /api/stats）
+      # 0.1.22 去设备绑定：0.0.0.0:19021/19022 两个 LAN 直连映射删除——
+      # 商店版任意用户设备 IP 不同，裸 IP 直连通道无意义；大文件走域名分片上传
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 5 http://127.0.0.1:8766/api/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 5
+    networks:
+      - traefik-shared-network
+
+networks:
+  traefik-shared-network:
+    external: true
