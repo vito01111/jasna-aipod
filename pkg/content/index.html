@@ -201,7 +201,7 @@
 <header>
   <div class="logo">J</div>
   <h1>Jasna 工作台</h1>
-  <span class="ver">v0.1.31</span>
+  <span class="ver">v0.1.33</span>
   <div class="spacer"></div>
   <select id="ch-sel" title="上传通道：自动=优先局域网直连，失败回退域名中转" onchange="setChannel(this.value)" style="background:#0d1116;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:5px 8px;font-size:12.5px">
     <option value="auto">⇅ 自动</option>
@@ -572,7 +572,7 @@
 <div class="modal-bg" id="welcomemodal">
   <div class="modal" style="width:min(640px,94vw)">
     <h3 style="margin:0 0 6px">欢迎使用 Jasna 视频修复工作台</h3>
-    <div class="dim" style="margin-bottom:4px">上传带马赛克的视频 → 自动扫描定位 → 神经网络修复 → 成品入库 / 保存到懒猫网盘。需要懒猫 AI 算力舱在线。</div>
+    <div class="dim" style="margin-bottom:4px">上传带马赛克的视频 → 自动扫描定位 → 神经网络修复 → 成品入库 / 回传保存。需要懒猫 AI 算力舱在线。</div>
     <div class="welcome-steps">
       <div class="wstep"><b>1 上传</b><span class="dim">本地或懒猫网盘</span></div>
       <div class="wstep"><b>2 扫描</b><span class="dim">自动检出马赛克段</span></div>
@@ -1275,7 +1275,7 @@ function histRowHtml(h) {
   const safeIn = (h.input || '').replace(/['\\]/g, '');
   let acts = '';
   if (h.state === 'done') acts = '<button class="btn sec mini" onclick="event.stopPropagation();previewOutput(\'' + safeOut + '\',\'' + safeIn + '\')">对比</button>' +
-    '<a class="btn sec mini" style="text-decoration:none" onclick="event.stopPropagation()" href="' + UP('/outputs/' + encodeURI(out)) + '?dl=1">回传</a>';
+    '<button class="btn sec mini" onclick="event.stopPropagation();saveOutput(\'' + safeOut + '\')">回传</button>';
   else if (h.state === 'failed' || h.state === 'interrupted' || h.state === 'cancelled') acts = '<button class="btn mini" onclick="event.stopPropagation();drawerRetryHist(\'' + h.id + '\')"' + (srcGone(h) ? ' disabled title="源视频已删除，无法重新处理"' : '') + '>' + (h.resume_info ? '从断点继续' : '重试') + '</button>' +
     '<button class="btn danger mini" onclick="event.stopPropagation();delJobRecord(\'' + h.id + '\')">删除</button>';
   return '<div class="row hist-row" onclick="event.stopPropagation()">' +
@@ -1325,7 +1325,7 @@ function cardMenuItems(r) {
     return [];
   }
   const items = [];
-  if (r.state === 'done') items.push(['drive', '保存到懒猫网盘'], ['jretry', '重新处理', '', srcGone(r) ? '源视频已删除，无法重新处理' : '']);
+  if (r.state === 'done') items.push(['jretry', '重新处理', '', srcGone(r) ? '源视频已删除，无法重新处理' : '']);
   items.push(['log', '日志'], ['segedit', '段编辑']);
   if (r.state === 'running' || r.state === 'queued' || r.state === 'cancelling') {
     items.push(['jyield', r.state === 'running' ? '让位（断点保留·队列推进）' : '取消任务', 'danger']);
@@ -1372,7 +1372,7 @@ function renderTaskCard(r) {
   // 操作分层：主操作≤2 直接露出（首个主色），其余收进 ⋯ 溢出菜单
   const parts = [];
   cardPrimary(r).forEach((p, i) => {
-    if (p[0] === 'dl') parts.push('<a class="btn sec mini" style="text-decoration:none" onclick="event.stopPropagation()" href="' + UP('/outputs/' + encodeURI(r.output.split('/').pop())) + '?dl=1">回传</a>');
+    if (p[0] === 'dl') parts.push('<button class="btn sec mini" onclick="event.stopPropagation();saveOutput(\'' + r.output.split('/').pop().replace(/['\\]/g, '') + '\')">回传</button>');
     else parts.push('<button class="btn ' + (i === 0 ? '' : 'sec') + ' mini" data-act="' + p[0] + '"' + (p[3] ? ' disabled title="' + p[3] + '"' : '') + '>' + p[1] + '</button>');
   });
   if (cardMenuItems(r).length) parts.push('<span class="menu-wrap"><button class="btn sec mini" data-act="more" title="更多操作">⋯</button></span>');
@@ -1445,7 +1445,6 @@ async function taskAction(r, act, btn) {
     if (d2.error) alert(d2.error); pollJobs();
   }
   else if (act === 'log') openDrawer(r);
-  else if (act === 'drive') driveSave(r.output.split('/').pop());
 }
 async function pollJobs() {
   try {
@@ -1722,8 +1721,7 @@ function renderDrawer() {
     if (r.state === 'failed' || r.state === 'cancelled' || r.state === 'done' || r.state === 'interrupted') a.push('<button class="btn mini" onclick="drawerAct(\'jretry\')"' + (srcGone(r) ? ' disabled title="源视频已删除，无法重新处理"' : '') + '>' + (r.state === 'done' ? '重新处理' : '重试') + '</button>');
     if (r.state === 'failed' || r.state === 'cancelled' || r.state === 'interrupted') a.push('<button class="btn danger mini" onclick="drawerAct(\'jdel\')">删除记录</button>');
     if (r.state === 'done') a.push('<button class="btn sec mini" onclick="previewOutput(\'' + r.output.split('/').pop().replace(/['\\]/g, '') + '\',\'' + (r.input || '').replace(/['\\]/g, '') + '\')">对比预览</button>');
-    if (r.state === 'done') a.push('<a class="btn sec mini" style="text-decoration:none" href="' + UP('/outputs/' + r.output.split('/').pop()) + '?dl=1">回传</a>',
-                                   '<button class="btn sec mini" onclick="driveSave(\'' + r.output.split('/').pop() + '\')">保存到懒猫网盘</button>');
+    if (r.state === 'done') a.push('<button class="btn sec mini" onclick="saveOutput(\'' + r.output.split('/').pop().replace(/['\\]/g, '') + '\')">回传</button>');
     const actHtml2 = a.join('');
     if ($('d-actions').dataset.h !== actHtml2) { $('d-actions').dataset.h = actHtml2; $('d-actions').innerHTML = actHtml2 }
     const hist = r._history || [];
@@ -2181,9 +2179,8 @@ function renderOutputRows() {
     const td = document.createElement('td'); const acts = document.createElement('div'); acts.className = 'actions';
     const bp = document.createElement('button'); bp.className = 'btn sec mini'; bp.textContent = jb && jb.input ? '对比' : '预览';
     bp.onclick = () => previewOutput(o.name, jb && jb.input);
-    const a = document.createElement('a'); a.className = 'btn sec mini'; a.textContent = '回传';
-    a.href = UP('/outputs/' + o.name) + '?dl=1'; a.style.textDecoration = 'none';
-    const b2 = document.createElement('button'); b2.className = 'btn sec mini'; b2.textContent = '保存到懒猫网盘'; b2.onclick = () => driveSave(o.name);
+    const a = document.createElement('button'); a.className = 'btn sec mini'; a.textContent = '回传';
+    a.onclick = () => saveOutput(o.name);
     const b3 = document.createElement('button'); b3.className = 'btn danger mini'; b3.textContent = '删除';
     b3.onclick = async () => { if (!confirm('删除成品 ' + o.name + '？（不可恢复）')) return;
       const r = await fetch(WEB + '/outputs/' + o.name, {method:'DELETE'}); const d2 = await r.json();
@@ -2198,7 +2195,7 @@ function renderOutputRows() {
       };
       acts.append(b4);
     }
-    acts.append(bp, a, b2, b3); td.append(acts); tr.append(td); tb.append(tr);
+    acts.append(bp, a, b3); td.append(acts); tr.append(td); tb.append(tr);
   });
   hydrateThumbs(tb);
   renderOSelBar();
@@ -2992,18 +2989,50 @@ async function driveImportUI() {   // 素材库「从懒猫网盘导入」入口
   } catch (e) { /* 用户取消，静默 */ }
 }
 /* 存网盘：平台 picker 选目录 → 成品流式 PUT 直写（duplex half，带进度，不经内存整体缓冲） */
-async function driveSave(name) {
+/* 成品回传（0.1.33 文件拦截·显式双入口）：二选一「保存到懒猫网盘 / 保存到本地」。
+   网盘分支 = lzc-file-picker 目录选择 + 流式 WebDAV PUT（文件名应用侧拼——picker
+   保存模式实测可能不带文件名输入，落名会是时间戳丢扩展名，故由我们控制完整路径）；
+   本地分支 = 隐藏 iframe 直下 ?dl=1（attachment 头），不经 anchor.click 以绕过
+   官方注入（显式入口带意图标记，防双重弹窗）。取数固定域名链路（WEB）。
+   （0.1.32 的 showSaveFilePicker 路线在懒猫客户端实测无拦截：注入的 FS API 钩子
+   只在 webview 原生 API 存在时才安装，未生效时落裸系统对话框，故回退显式入口。） */
+function askSaveTarget(name) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#161b22;border:1px solid var(--line);border-radius:12px;padding:18px 20px;min-width:340px;text-align:center';
+    box.innerHTML = '<div style="font-weight:600;margin-bottom:4px">回传成品</div>'
+      + '<div class="dim" style="font-size:12px;margin-bottom:14px;word-break:break-all">' + escH(name) + '</div>';
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
+    const mk = (text, cls) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = text; return b };
+    const bDrive = mk('保存到懒猫网盘', ''), bLocal = mk('保存到本地', 'sec'), bCancel = mk('取消', 'sec');
+    const done = v => { ov.remove(); resolve(v) };
+    bDrive.onclick = () => done('drive');
+    bLocal.onclick = () => done('local');
+    bCancel.onclick = () => done(null);
+    ov.onclick = e => { if (e.target === ov) done(null) };
+    row.append(bDrive, bLocal, bCancel); box.append(row); ov.append(box); document.body.append(ov);
+  });
+}
+function localDownload(name) {
+  const f = document.createElement('iframe');
+  f.style.display = 'none';
+  f.src = WEB + '/outputs/' + encodeURIComponent(name) + '?dl=1';
+  document.body.append(f);
+  setTimeout(() => f.remove(), 120000);
+  driveToast('⇩ 已开始下载到本地：' + escH(name), 5000);
+}
+async function driveSaveViaPicker(name) {
   let picks;
   try { picks = await openDrivePicker({ dir: true }) } catch (e) { return }   // 取消静默
   if (!picks || !picks.length) return;
   let dir = '';
   try { dir = driveRelPath(picks[0].filename || picks[0].basename) } catch (e) { alert('目录路径不合法'); return }
-  localStorage.setItem('jasna_savedir', dir);
   const dest = (dir ? dir + '/' : '') + name;
   const toast = driveToast('⇧ 存网盘 ' + escH(dest) + ' …');
   try {
-    const src = UP('/outputs/' + encodeURIComponent(name)) + '?dl=1';
-    const resp = await fetch(src);
+    const resp = await fetch(WEB + '/outputs/' + encodeURIComponent(name) + '?dl=1');
     if (!resp.ok || !resp.body) throw new Error('读取成品失败 HTTP ' + resp.status);
     const total = +(resp.headers.get('content-length') || 0);
     const reader = resp.body.getReader();
@@ -3025,6 +3054,11 @@ async function driveSave(name) {
     toast.innerHTML = '✗ 存网盘失败：' + escH(e.message || e);
     toast._tm = setTimeout(() => toast.remove(), 6000);
   }
+}
+async function saveOutput(name) {
+  const where = await askSaveTarget(name);
+  if (where === 'drive') return driveSaveViaPicker(name);
+  if (where === 'local') return localDownload(name);
 }
 /* file_handler 入口：网盘「打开方式」→ 走同一条流式导入链（显式意图，直进导入不弹二选一） */
 async function openFromDriveParam() {
@@ -3125,7 +3159,7 @@ function demoDoneWatch() {   // 全片任务收尾：清理 autochain span 任�
         if (on) try { await fetch(WEB + '/outputs/' + encodeURIComponent(on), { method: 'DELETE' }) } catch (e) {}
       }
       pollJobs(); loadOutputs();
-      if (mine.state === 'done') driveToast('✓ 演示完成！成品已入库——点「对比预览」查看修复效果，或「保存到懒猫网盘」。', 10000);
+      if (mine.state === 'done') driveToast('✓ 演示完成！成品已入库——点「对比预览」查看修复效果，或「回传」保存到本地/懒猫网盘。', 10000);
       else driveToast('✗ 演示任务未完成：' + escH(mine.state), 8000);
     } catch (e) { /* 下一轮重试 */ }
     finally { busy = false; }

@@ -1,6 +1,6 @@
 #!/bin/sh
 # jasna 部署补丁（幂等）：CPU 编码器回退 + web 后端文件就位。
-# 用法: sh apply.sh [源码目录]（默认 /tmp/jasna，可传入你的 jasna 检出目录）
+# 用法: 在 Spark 宿主 sh apply.sh（源码目录默认 /tmp/jasna）
 set -e
 SRC="${1:-/tmp/jasna}"
 PATCH_DIR="$(cd "$(dirname "$0")" && pwd)"

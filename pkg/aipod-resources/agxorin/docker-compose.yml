@@ -10,7 +10,7 @@ services:
     # 0.1.28：微烤镜像 = 0.1.26 + 首启预烤装配脚本 + 预烤引擎（l4tR36.5.2-trt10.3.0，267MB）。
     # 新设备首启按环境指纹装配引擎，零编译开箱即用；指纹不匹配自动回落种子播种
     # （首任务现场编译，= 旧行为）。脚本：ops/prebake_setup.py（详见文件头注释）。
-    image: ${JASNA_IMAGE:-<你的镜像仓库>/jasna-aipod-agxorin:0.1.31}
+    image: ${JASNA_IMAGE:-<你的镜像仓库>/jasna-aipod-agxorin:0.1.33}
     pull_policy: if_not_present
     container_name: jasna-agxorin-1
     restart: unless-stopped
