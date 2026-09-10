@@ -3,7 +3,7 @@
 # 在 x3 上原生构建（QEMU 不适用：含宿主 bind 语义验证过的运行时，实机构建最稳）。
 #
 # 构建（x3 上，源码上下文 = 打好补丁的 jasna 树，见 ops-aipod/build_store.sh）：
-#   docker build -f Dockerfile.agxorin -t <你的镜像仓库>/jasna-aipod-agxorin:0.1.0 .
+#   docker build -f Dockerfile.agxorin -t registry.lazycat.cloud/u87691755/jasna-aipod/agxorin:0.1.0 .
 FROM registry.lazycat.cloud/x/voxcpm-fastapi:b21c3c7
 
 RUN apt-get update \

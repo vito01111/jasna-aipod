@@ -1,5 +1,5 @@
 package: cloud.lazycat.aipod.jasna
-version: 0.1.33
+version: 0.1.34
 name: Jasna 修复工作台
 description: 视频修复工作台（AIPod 算力舱版）：上传→扫描→修复→成品库，TRT 推理 + NVDEC/NVENC 硬解硬编
 # 与 Spark 版 cloud.lazycat.app.jasna-spark 并存（用户 2026-09-04 定案）
